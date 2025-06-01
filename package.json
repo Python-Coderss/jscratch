@@ -1,0 +1,12 @@
+{
+  "name": "scratch-like-app-frontend",
+  "version": "0.1.0",
+  "description": "Frontend for Java Scratch-like app",
+  "main": "webapp/js/app.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}

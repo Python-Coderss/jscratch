@@ -21,8 +21,13 @@ import java.util.regex.Pattern;
 import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.util.UUID; // For unique filenames
-import java.io.InputStream; // For reading request body
+import java.util.UUID;
+import java.io.InputStream;
+
+// JSON library imports
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONException;
 
 public class SimpleHttpServer {
 
@@ -319,104 +324,73 @@ public class SimpleHttpServer {
                 return;
             }
 
-            LOGGER.info("Received JSON for " + requestPath + ": " + requestBodyString);
-
-            // Simple JSON Parsing (Fragile - assumes specific structure)
-            String blockType = null;
-            String pythonCode = null;
-            String sayText = null;
+            LOGGER.info("Received request body for " + requestPath + ": " + requestBodyString);
+            StringBuilder aggregatedOutput = new StringBuilder();
 
             try {
-                // Extract blockType: "type":"VALUE"
-                int typeKeyIndex = requestBodyString.indexOf("\"type\":\"");
-                if (typeKeyIndex == -1) throw new IllegalArgumentException("Missing 'type' field in JSON.");
-                int typeValueStart = typeKeyIndex + "\"type\":\"".length();
-                int typeValueEnd = requestBodyString.indexOf("\"", typeValueStart);
-                if (typeValueEnd == -1) throw new IllegalArgumentException("Malformed 'type' field in JSON.");
-                blockType = requestBodyString.substring(typeValueStart, typeValueEnd);
+                JSONArray program = new JSONArray(requestBodyString); // Parse the whole body as an array
 
-                if ("PYTHON_BLOCK".equals(blockType)) {
-                    // Extract code: "inputs":{"CODE":"VALUE"}
-                    int codeKeyIndex = requestBodyString.indexOf("\"CODE\":\"");
-                    if (codeKeyIndex == -1) throw new IllegalArgumentException("Missing 'CODE' input for PYTHON_BLOCK.");
-                    int codeValueStart = codeKeyIndex + "\"CODE\":\"".length();
-                    // Find the closing quote for CODE, carefully handling escaped quotes
-                    // This is where manual parsing gets very tricky. A simple approach:
-                    int codeValueEnd = -1;
-                    boolean escaped = false;
-                    for(int i = codeValueStart; i < requestBodyString.length(); i++) {
-                        if (requestBodyString.charAt(i) == '\\') {
-                            escaped = !escaped;
-                        } else if (requestBodyString.charAt(i) == '"' && !escaped) {
-                            codeValueEnd = i;
+                for (int i = 0; i < program.length(); i++) {
+                    JSONObject block = program.getJSONObject(i);
+                    String blockType = block.optString("type", "UNKNOWN_BLOCK"); // Default to UNKNOWN_BLOCK if type is missing
+                    JSONObject inputs = block.optJSONObject("inputs");
+                    if (inputs == null) inputs = new JSONObject(); // Ensure inputs is never null for optString/optInt calls
+
+                    // String blockId = block.optString("id", "no_id"); // For logging if needed
+                    // LOGGER.info("Processing block " + (i + 1) + "/" + program.length() + " (ID: " + blockId + ", Type: " + blockType + ")");
+                    aggregatedOutput.append("Block ").append(i + 1).append(" (").append(blockType).append("):\n");
+
+                    switch (blockType) {
+                        case "PYTHON_BLOCK":
+                            String pythonCode = inputs.optString("CODE", ""); // Default to empty string
+                            if (pythonCode.trim().isEmpty()) {
+                                aggregatedOutput.append("  Error: Python code was empty.\n");
+                                LOGGER.warning("Empty Python code received for a PYTHON_BLOCK in program array.");
+                                continue; // Skip this block, process next
+                            }
+                            LOGGER.info("Executing PYTHON_BLOCK via Jython.");
+                            JythonExecutor.ExecutionResult result = jythonExecutor.executeScript(pythonCode);
+                            // Indent the result for better readability in aggregated output
+                            String[] lines = result.toString().split("\n");
+                            for(String line : lines) {
+                                aggregatedOutput.append("  ").append(line).append("\n");
+                            }
+                            if (result.hasError()) {
+                                LOGGER.warning("Jython execution for PYTHON_BLOCK completed with errors/exceptions.");
+                            } else {
+                                LOGGER.info("Jython execution for PYTHON_BLOCK completed successfully.");
+                            }
                             break;
-                        } else {
-                            escaped = false;
-                        }
+
+                        case "SAY_BLOCK":
+                            String textToSay = inputs.optString("TEXT", "");
+                            LOGGER.info("Executing SAY_BLOCK: " + textToSay);
+                            aggregatedOutput.append("  [Output] SAY: ").append(textToSay).append("\n");
+                            break;
+
+                        case "LOOP_BLOCK":
+                            int count = inputs.optInt("COUNT", 0);
+                            LOGGER.info("Encountered LOOP_BLOCK with count: " + count);
+                            aggregatedOutput.append("  Loop ").append(count).append(" times (Note: execution of children not yet implemented).\n");
+                            // Future: process block.optJSONArray("children") recursively here
+                            // For now, just acknowledging the block.
+                            break;
+
+                        default:
+                            LOGGER.warning("Unknown block type encountered: " + blockType);
+                            aggregatedOutput.append("  Error: Unknown block type '").append(blockType).append("'.\n");
+                            break;
                     }
-                    if (codeValueEnd == -1) throw new IllegalArgumentException("Malformed 'CODE' input for PYTHON_BLOCK.");
-                    pythonCode = requestBodyString.substring(codeValueStart, codeValueEnd)
-                                     .replace("\\n", "\n")
-                                     .replace("\\\"", "\"")
-                                     .replace("\\\\", "\\")
-                                     .replace("\\r", "\r")
-                                     .replace("\\t", "\t"); // Basic unescaping
-                } else if ("SAY_BLOCK".equals(blockType)) {
-                    // Extract text: "inputs":{"TEXT":"VALUE"}
-                    int textKeyIndex = requestBodyString.indexOf("\"TEXT\":\"");
-                    if (textKeyIndex == -1) throw new IllegalArgumentException("Missing 'TEXT' input for SAY_BLOCK.");
-                    int textValueStart = textKeyIndex + "\"TEXT\":\"".length();
-                    int textValueEnd = requestBodyString.indexOf("\"", textValueStart); // Assumes no escaped quotes in say text for simplicity here
-                    if (textValueEnd == -1) throw new IllegalArgumentException("Malformed 'TEXT' input for SAY_BLOCK.");
-                    sayText = requestBodyString.substring(textValueStart, textValueEnd)
-                                    .replace("\\n", "\n")
-                                    .replace("\\\"", "\"")
-                                    .replace("\\\\", "\\")
-                                    .replace("\\r", "\r")
-                                    .replace("\\t", "\t"); // Basic unescaping for say text too
+                    aggregatedOutput.append("\n"); // Add a blank line after each block's output section
                 }
+                sendResponse(t, 200, aggregatedOutput.toString(), requestPath, "ExecuteProgramArray");
 
-            } catch (IllegalArgumentException | StringIndexOutOfBoundsException e) {
-                LOGGER.log(Level.WARNING, "Error parsing JSON request body for " + requestPath + ": " + e.getMessage() + ". Body: " + requestBodyString, e);
-                sendResponse(t, 400, "Bad Request: Malformed JSON or missing required fields. " + e.getMessage(), requestPath, "ExecuteProgram");
-                return;
-            }
-
-
-            if ("PYTHON_BLOCK".equals(blockType)) {
-                if (pythonCode == null || pythonCode.trim().isEmpty()) {
-                     LOGGER.warning("Empty Python code received after parsing for " + requestPath);
-                     sendResponse(t, 400, "Bad Request: Python code cannot be empty.", requestPath, "ExecuteProgramPython");
-                     return;
-                }
-                LOGGER.info("Executing PYTHON_BLOCK via Jython for request: " + requestPath);
-                try {
-                    JythonExecutor.ExecutionResult result = jythonExecutor.executeScript(pythonCode);
-                    String responseBody = result.toString();
-                    if (result.hasError()) {
-                        LOGGER.warning("Jython execution for " + requestPath + " (PYTHON_BLOCK) completed with errors/exceptions. Combined output:\n" + responseBody);
-                    } else {
-                        LOGGER.info("Jython execution for " + requestPath + " (PYTHON_BLOCK) completed successfully. Output:\n" + responseBody);
-                    }
-                    t.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
-                    sendResponse(t, 200, responseBody, requestPath, "ExecuteProgramPython");
-                } catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, "Unexpected Java error during Jython execution for " + requestPath, e);
-                    sendResponse(t, 500, "Internal Server Error: Failed to execute Python script via Jython due to server-side Java error.", requestPath, "ExecuteProgramPython");
-                }
-            } else if ("SAY_BLOCK".equals(blockType)) {
-                if (sayText == null) { // Should not happen if parsing logic is correct and TEXT is mandatory
-                     LOGGER.warning("SAY_BLOCK text is null after parsing for " + requestPath);
-                     sendResponse(t, 400, "Bad Request: SAY_BLOCK text is missing.", requestPath, "ExecuteProgramSay");
-                     return;
-                }
-                LOGGER.info("Executing SAY_BLOCK for request: " + requestPath + ". Text: \"" + sayText + "\"");
-                String responseBody = "[Output] SAY: " + sayText;
-                t.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
-                sendResponse(t, 200, responseBody, requestPath, "ExecuteProgramSay");
-            } else {
-                LOGGER.warning("Unknown block type received for " + requestPath + ": " + blockType);
-                sendResponse(t, 400, "Bad Request: Unknown block type '" + blockType + "'.", requestPath, "ExecuteProgram");
+            } catch (JSONException e) {
+                LOGGER.log(Level.WARNING, "JSON parsing error for " + requestPath + ": " + e.getMessage() + ". Body: " + requestBodyString, e);
+                sendResponse(t, 400, "Bad Request: Malformed JSON program structure. " + e.getMessage(), requestPath, "ExecuteProgram");
+            } catch (Exception e) { // Catch-all for other unexpected errors during processing
+                LOGGER.log(Level.SEVERE, "Unexpected error processing program for " + requestPath + ": " + e.getMessage() + ". Body: " + requestBodyString, e);
+                sendResponse(t, 500, "Internal Server Error: Could not execute program due to an unexpected server error.", requestPath, "ExecuteProgram");
             }
         }
     }

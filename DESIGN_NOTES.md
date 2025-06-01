@@ -55,15 +55,24 @@ The program constructed on the frontend would be serialized into a JSON array of
     }
   }
   // Example of a future control flow block:
+  {
+    "id": "block_004",
+    "type": "LOOP_BLOCK",
+    "inputs": {
+      "COUNT": 3
+    },
+    "children": [] // Initially empty, for future nested blocks
+  }
+  // Example of a future control flow block with children:
   // {
-  //   "id": "block_004",
+  //   "id": "block_005",
   //   "type": "REPEAT_BLOCK",
   //   "inputs": {
   //     "TIMES": 3
   //   },
   //   "children": [
   //     {
-  //       "id": "block_005",
+  //       "id": "block_006",
   //       "type": "MOVE_SPRITE_BLOCK",
   //       "inputs": { "STEPS": 10 }
   //     }
@@ -191,3 +200,22 @@ The primary way users see results is through the "Stage" area.
 *   **Structured Output (Future):** For more complex interactions (e.g., sprite changes, graphical output), the server might send back a more structured JSON response that the frontend can interpret to update the stage visually, rather than just plain text. For now, plain text is the focus.
 
 This conceptual framework aims to provide a flexible way to execute a mix of predefined "standard" blocks (as Java methods) and custom Python code blocks (via Jython), all interacting through a shared context.
+
+## Frontend Architecture Notes
+
+### Client-Side Asset Handling (Costumes & Sounds)
+
+Currently, costume (image) and sound (audio) assets are handled entirely on the client-side:
+
+*   **File Selection:** Users select local files using the `<input type="file">` element.
+*   **`FileReader` API:** The JavaScript `FileReader` API is used to read the selected file's content.
+    *   For images (costumes), files are read as Data URLs (`reader.readAsDataURL(file)`).
+    *   For audio (sounds), files are also read as Data URLs.
+*   **Local Storage (In-Memory):**
+    *   The generated Data URLs, along with metadata like filename and a generated ID, are stored in JavaScript arrays within the `app.js` scope (e.g., `currentSpriteCostumes`, `currentSpriteSounds`).
+*   **Display/Playback:**
+    *   **Costumes:** Image thumbnails are displayed by creating `<img>` elements and setting their `src` attribute to the Data URL.
+    *   **Sounds:** Sounds are played by creating an `Audio` object (`new Audio(dataURL)`) and calling its `play()` method.
+*   **No Server Interaction:** There is no server-side upload, storage, or processing of these assets. They exist only in the browser's memory for the current session. Refreshing the page will clear any uploaded assets.
+
+This approach is simple for initial development but has limitations (no persistence, assets not tied to saved projects, potential memory issues with very large files/many assets). Future enhancements would involve server-side asset management.

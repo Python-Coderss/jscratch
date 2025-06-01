@@ -2,143 +2,163 @@
 
 ## Project Description
 
-This project is a web application that provides a simplified, Scratch-like visual programming environment. Users can add Python code blocks to a script assembly area and execute them. The frontend is built with HTML, CSS, and vanilla JavaScript, while the backend is a lightweight Java HTTP server responsible for executing the Python code.
+This project is a web application that provides a simplified, Scratch-like visual programming environment. Users can drag and drop blocks (including custom Python code blocks) to an assembly area to create simple programs. The frontend is built with HTML, CSS, and vanilla JavaScript, while the backend is a lightweight Java HTTP server responsible for executing the programs. Python code blocks are executed using an embedded Jython interpreter.
 
-The primary goal is to explore the integration of a visual block metaphor with Python scripting, executed server-side.
+The primary goal is to explore the integration of a visual block metaphor with Python scripting, executed server-side, and to build a foundation for more complex block-based programming.
 
 ## Features (Current State)
 
-*   **Web-Based Interface:** Accessible via a modern web browser.
-*   **Three-Panel Layout:**
-    *   **Block Palette:** Contains available blocks (currently "Python Code Block" and "Say Block").
-    *   **Script Assembly Area:** Where a single chosen block (Python or Say) is configured.
-    *   **Stage Area:** Displays the output from the executed program.
-*   **Block Types:**
-    *   **Python Code Block:**
-        *   A clickable block in the palette.
-        *   Opens a modal dialog to input or edit Python code.
-        *   Python code is executed using an **embedded Jython interpreter** within the Java server.
-    *   **Say Block:**
-        *   A clickable block in the palette.
-        *   Prompts the user for text input.
-        *   The "said" text is displayed in the Stage Area, simulated by the server.
-*   **Program Execution:**
-    *   A "Run Program" button triggers the execution of the configured block.
-    *   The frontend sends a **JSON payload** to the backend describing the block to execute (e.g., its type and code/text).
-    *   The Java backend parses this JSON and dispatches to the appropriate execution logic (Jython for Python blocks, specific Java handling for Say blocks).
-    *   Output (from Python or simulated by Say block) is returned to the frontend and displayed.
+*   **Web-Based Interface:** Accessible via a modern web browser with a tabbed interface ("Scripts", "Costumes", "Sounds").
+*   **Scripts Tab:**
+    *   **Three-Panel Layout:** Block Palette, Script Assembly Area, and Stage Area.
+    *   **Drag-and-Drop Interface:** Blocks (Python, Say, Loop) can be dragged from the palette to the script assembly area, allowing for vertical stacking to form a program.
+    *   **Block Configuration:**
+        *   **Python Code Block:** Opens a modal for multi-line Python code input. Executed using an embedded Jython interpreter on the server.
+        *   **Say Block:** Prompts for text input. Processed by the server to simulate a "say" action.
+        *   **Loop Block:** Prompts for a repetition count. Rendered with a visual placeholder for nested blocks (nesting execution not yet implemented).
+    *   **Multi-Block Program Execution:** The frontend constructs a JSON array representing the sequence of assembled blocks. This is sent to the server, which parses it using `org.json` and executes blocks sequentially.
+    *   **Aggregated Output:** Output from all executed blocks (or error messages) is collected and displayed in the "Stage Area".
+*   **Costumes Tab:**
+    *   **Client-Side Asset Handling:** Allows users to select local image files.
+    *   Thumbnails of selected images are displayed on the page. (No server upload/storage yet).
+*   **Sounds Tab:**
+    *   **Client-Side Asset Handling:** Allows users to select local audio files.
+    *   Uploaded sounds are listed with their names and a "Play" button to play them directly in the browser using HTML5 Audio. (No server upload/storage yet).
 *   **Server-Side Operations:**
-    *   Java HTTP server handles static file serving for the frontend and API requests.
-    *   Server-side logging (`server.log`) records requests, script executions, and errors.
-*   **Basic Script Runner (Legacy):** The server also retains a `/run/<script_name>` endpoint for executing pre-existing shell scripts from the `scripts/` directory (this uses external process execution, not Jython).
+    *   Lightweight Java HTTP server handles static file serving (HTML, CSS, JS) and API requests for program execution.
+    *   Server-side logging (`server.log`) records important events, requests, and errors.
+*   **Basic Script Runner (Legacy):** Retains a `/run/<script_name>` endpoint for executing pre-existing shell scripts from the `scripts/` directory via external process execution.
 
 ## Directory Structure
 
 -   `src/main/java/com/example/SimpleHttpServer.java`: The core Java code for the backend HTTP server, including request handlers.
 -   `src/main/java/com/example/JythonExecutor.java`: Class responsible for executing Python code using the embedded Jython interpreter.
 -   `webapp/`: Contains all frontend files (`index.html`, `style.css`, `js/app.js`).
--   `scripts/`: Holds example shell scripts (`hello.sh`, `list_files.sh`, etc.) for the legacy `/run/` endpoint. (Note: The `/api/execute_program` endpoint for UI-driven Python execution now uses Jython and does not save temporary files here.)
--   `lib/`: This directory is for JAR dependencies. **You must create this directory and place the Jython Standalone JAR here.**
+-   `scripts/`: Holds example shell scripts for the legacy `/run/` endpoint.
+-   `lib/`: This directory is for JAR dependencies. **You must create this directory and place the required JARs (Jython Standalone and Org.JSON) here.**
 -   `server.log`: Log file generated by the Java server.
 -   `out/` (Optional, created during build): Default directory for compiled Java class files.
+-   `DESIGN_NOTES.md`: Contains conceptual details about program execution architecture and sandboxing.
 
 ## Prerequisites
 
 *   **Java JDK 8 or higher:** Required to compile and run the Java server code.
-*   **Jython Standalone JAR:** Required for executing Python blocks from the web UI. Place this in the `lib/` directory.
-*   **Python 3 Interpreter (Optional, for legacy script runner):** If you intend to use the `/run/<script_name>` endpoint with Python scripts (e.g. `.py` with a shebang), then a CPython interpreter (python3 or python) must be in the system's PATH. This is **not** used for Python blocks added via the UI.
+*   **Jython Standalone JAR:** Required for executing Python blocks from the web UI.
+*   **Org.JSON JAR:** Required by the server to parse JSON data sent from the frontend.
+*   **Python 3 Interpreter (Optional, for legacy script runner):** If you intend to use the `/run/<script_name>` endpoint with Python scripts that require CPython, it must be in the system's PATH. This is **not** used for Python blocks added via the UI.
 *   **Web Browser:** A modern web browser to access the application.
 
-### Jython Setup
+### Dependency Setup (`lib/` directory)
 
-The web UI's Python Code Blocks are executed using Jython, which runs Python code directly within the Java Virtual Machine.
-
-1.  **Create `lib` Directory:** If it doesn't already exist, create a directory named `lib` in the root of this project.
-2.  **Download Jython:**
-    *   Go to the [Jython official website](https://www.jython.org/download).
-    *   Download the "Jython Standalone" JAR file (e.g., `jython-standalone-2.7.3.jar` or a newer compatible version).
-3.  **Place JAR in `lib/`:** Copy the downloaded `jython-standalone-X.Y.Z.jar` into the `lib/` directory you created. **Ensure the filename here matches the one used in the compile/run commands below.**
+The Java server relies on external JAR files. These need to be manually downloaded and placed in a `lib/` directory within the project root.
 
 1.  **Create `lib` Directory:** If it doesn't already exist, create a directory named `lib` in the root of this project.
-2.  **Download Jython:**
+2.  **Download Jython Standalone JAR:**
     *   Go to the [Jython official website](https://www.jython.org/download).
-    *   Download the "Jython Standalone" JAR file (e.g., `jython-standalone-2.7.3.jar`).
-3.  **Place JAR in `lib/`:** Copy the downloaded `jython-standalone-X.Y.Z.jar` into the `lib/` directory you created.
+    *   Download the "Jython Standalone" JAR file (e.g., `jython-standalone-2.7.3.jar`). Replace `2.7.3` with your downloaded version in commands below.
+    *   Place this JAR into the `lib/` directory.
+3.  **Download Org.JSON JAR:**
+    *   Go to the [Maven Central Repository Search](https://search.maven.org/search?q=g:org.json%20AND%20a:json).
+    *   Select a recent version (e.g., `20231013`). Replace `20231013` with your downloaded version in commands below.
+    *   Download the JAR file (e.g., `json-20231013.jar`).
+    *   Place this JAR into the `lib/` directory.
+
+**After setup, your `lib/` directory should contain at least:**
+*   `jython-standalone-X.Y.Z.jar` (e.g., `jython-standalone-2.7.3.jar`)
+*   `json-YYYYMMDD.jar` (e.g., `json-20231013.jar`)
 
 ## How to Build and Run
 
-1.  **Ensure `lib` directory and Jython JAR are set up as described above.**
+1.  **Ensure `lib` directory and the Jython & JSON JARs are set up as described above.** Remember to replace version numbers in commands with the actual versions you downloaded.
 2.  **Compile the Java Server:**
-    Open a terminal or command prompt, navigate to the project's root directory. Create an `out` directory if it doesn't exist (`mkdir -p out`). Then, run the compilation command, adjusting the Jython JAR filename if yours is different:
+    Open a terminal or command prompt, navigate to the project's root directory. Create an `out` directory if it doesn't exist (`mkdir -p out`). Then, run the compilation command:
 
     *   **Linux/macOS (colon classpath separator):**
         ```bash
-        javac -cp "lib/jython-standalone-2.7.3.jar" -d out src/main/java/com/example/JythonExecutor.java src/main/java/com/example/SimpleHttpServer.java
+        javac -cp "lib/jython-standalone-2.7.3.jar:lib/json-20231013.jar" -d out src/main/java/com/example/*.java
         ```
     *   **Windows (semicolon classpath separator):**
         ```bash
-        javac -cp "lib\jython-standalone-2.7.3.jar" -d out src\main\java\com\example\JythonExecutor.java src\main\java\com\example\SimpleHttpServer.java
+        javac -cp "lib\jython-standalone-2.7.3.jar;lib\json-20231013.jar" -d out src\main\java\com\example\*.java
         ```
-    *(Note: The server will not be able to execute Python blocks from the UI without this JAR and correct classpath setup.)*
+    *(Note: The server will not function correctly without these JARs and the correct classpath setup. Ensure you use the correct JAR filenames for the versions you downloaded.)*
 
 3.  **Run the Java Server:**
-    After successful compilation, run the server using (adjust the Jython JAR filename and classpath separator for your OS):
+    After successful compilation, run the server using:
 
     *   **Linux/macOS:**
         ```bash
-        java -cp "lib/jython-standalone-2.7.3.jar:out" com.example.SimpleHttpServer
+        java -cp "lib/jython-standalone-2.7.3.jar:lib/json-20231013.jar:out" com.example.SimpleHttpServer
         ```
     *   **Windows:**
         ```bash
-        java -cp "lib\jython-standalone-2.7.3.jar;out" com.example.SimpleHttpServer
+        java -cp "lib\jython-standalone-2.7.3.jar;lib\json-20231013.jar;out" com.example.SimpleHttpServer
         ```
     The server will start, and you should see log messages in your console (and in `server.log`) indicating it's running on port 8000.
 
-3.  **Access the Application:**
+4.  **Access the Application:**
     Open your web browser and navigate to:
     `http://localhost:8000/`
 
 ## How to Use (Current Functionality)
 
-1.  **Open the Web Page:** Navigate to `http://localhost:8000/` in your browser.
-2.  **Choose a Block:**
-    *   In the "Block Palette" on the left, click either the "Python Code Block" or the "Say Block".
-3.  **Configure the Block:**
-    *   **Python Code Block:** A modal dialog will appear. Enter your Python code into the textarea and click "Save Python."
-    *   **Say Block:** A prompt dialog will appear. Enter the text you want the "program" to "say" and click "OK."
-4.  **View Assembled Block:** The chosen and configured block (e.g., "Python Block (Code Saved)" or "Say: \"your text\"") will appear in the "Script Assembly Area," replacing any block that was previously there.
-5.  **Run the Program:**
-    *   Click the "Run Program" button, located at the top of the "Script Assembly Area".
-6.  **See Output:**
-    *   **For Python Block:** The output from your Python script (including `print()` statements or any error messages from Jython) will be displayed in the "Stage" area.
-    *   **For Say Block:** A message like `[Output] SAY: your text` will be displayed in the "Stage" area.
+1.  **Open the Application:** Navigate to `http://localhost:8000/` in your browser. You will see the "Scripts" tab by default.
+
+2.  **Working with the "Scripts" Tab:**
+    *   **Adding Blocks:** Drag blocks ("Python Code Block", "Say Block", "Loop Block") from the "Block Palette" (left panel) to the "Script Assembly Area" (middle panel).
+    *   **Configuring Blocks:**
+        *   **Python Code Block:** When a Python block is dropped, a modal dialog will appear. Enter your Python code and click "Save Python."
+        *   **Say Block:** When a Say block is dropped, a prompt dialog will appear. Enter the text you want the program to "say" and click "OK."
+        *   **Loop Block:** When a Loop block is dropped, a prompt dialog will appear. Enter the number of repetitions (e.g., 3) and click "OK."
+    *   **Viewing Assembled Program:** The configured blocks will appear stacked in the "Script Assembly Area."
+    *   **Running the Program:** Click the "Run Program" button (usually at the top of the Script Assembly Area).
+    *   **Viewing Output:** The aggregated output from all executed blocks (Python script output, simulated "Say" messages, Loop block acknowledgments) will be displayed in the "Stage" area (right panel).
+
+3.  **Working with the "Costumes" Tab:**
+    *   Click on the "Costumes" tab.
+    *   Click the "Choose Files" button (or similar, depending on your browser for `<input type="file">`).
+    *   Select one or more image files from your local system.
+    *   Thumbnails of the selected images will appear in the "costume-thumbnail-list" area.
+
+4.  **Working with the "Sounds" Tab:**
+    *   Click on the "Sounds" tab.
+    *   Click the "Choose Files" button.
+    *   Select one or more audio files from your local system.
+    *   Each uploaded sound will be listed with its name and a "Play" button.
+    *   Click the "Play" button next to a sound's name to hear it.
+
+## Testing
+
+Automated JavaScript UI testing (e.g., with Jest) was explored. However, due to current execution environment limitations preventing the installation of Node.js packages or running test runners, this is not feasible at this time.
+
+Manual testing is the current approach for verifying frontend and integration functionality. Detailed manual test cases can be found in [TESTING.md](TESTING.md).
 
 ## Known Issues & Limitations
 
-*   **Single Block Execution:** The interface currently supports only one active block (either Python or Say) at a time. Adding a new block replaces the previous one.
-*   **No Visual Scripting Metaphor:** There is no actual dragging, dropping, or connecting of blocks. Interaction is via modals or prompts.
-*   **Basic Error Reporting:** Python script errors (via Jython) are displayed but might not be as detailed as a full Python IDE.
-*   **No State Persistence:** Code or text entered is not saved if you refresh the page.
-*   **Security of `/run/` endpoint:** The legacy `/run/<script_name>` endpoint directly executes scripts from the `scripts/` directory by name using external processes. Ensure only trusted scripts are placed there if this endpoint is used. The `/api/execute_program` endpoint for UI blocks now uses Jython.
+*   **Drag-and-Drop Limitations:** Drag-and-drop currently only supports adding new blocks to the end of the script. Reordering or deleting individual blocks from the assembly area is not yet implemented.
+*   **Nesting Placeholder:** The Loop block displays a visual area for nested blocks, but dropping blocks *into* this area (i.e., actual nesting) is not yet functional.
+*   **Client-Side Assets Only:** Costume and Sound assets are handled entirely on the client-side (using Data URLs and HTML5 Audio respectively). They are not uploaded to the server or saved with any project data. Refreshing the page will clear them.
+*   **No Sprite Concept:** There is no explicit "sprite" or character that costumes and sounds are associated with; they are currently global asset lists for the application instance.
+*   **Loop Block Execution:** Backend execution for Loop blocks is a placeholder; it acknowledges the loop and its count but does not yet execute any child blocks (as nesting is not implemented).
+*   **Sequential Execution Only:** Blocks in the main script area are executed in the order they appear.
+*   **No Block Editing After Placement:** Once a block is configured (e.g., Python code saved, Say text entered), it cannot be directly edited in the assembly area. To change it, you would typically delete it (if implemented) and add a new one.
+*   **Basic Error Reporting:** Python script errors (via Jython) are displayed, but the formatting is basic.
+*   **No State Persistence:** The assembled program, uploaded costumes, and sounds are not saved if you refresh the page.
+*   **Security of `/run/` endpoint:** The legacy `/run/<script_name>` endpoint directly executes scripts from the `scripts/` directory. Ensure only trusted scripts are placed there.
 
 ## Future Ideas
 
-*   Implement true drag-and-drop for blocks from the palette to the assembly area.
-*   Support for multiple blocks and defining a sequence of execution.
-*   Introduce more Scratch-like standard blocks (e.g., loops, conditionals, variables) that could potentially wrap or interact with Python code.
-*   Visual representation of script flow.
-*   Saving and loading user-created programs/scripts.
-*   More sophisticated error handling and debugging features.
+*   Implement execution of child blocks within Loop blocks.
+*   Allow editing and deletion of blocks in the assembly area.
+*   Implement drag-and-drop reordering of assembled blocks.
+*   Support for more "Standard Blocks" (e.g., variables, simple math, conditional logic).
+*   Visual feedback for connections between blocks.
+*   Saving and loading user-created programs.
 
 ## Design and Architecture
 
-The current execution model for code submitted from the web UI (via the `/api/execute_program` endpoint) uses a JSON payload to define the program (currently a single block) and Jython to run Python code blocks directly within the Java server. For a more Scratch-like experience with multiple, interconnected blocks, a more comprehensive program execution architecture is envisioned.
+The current execution model for code submitted from the web UI (via the `/api/execute_program` endpoint) uses a JSON array payload to define the program (a sequence of blocks). Python code blocks are run using Jython directly within the Java server, and standard blocks like "Say" are handled by specific Java logic. The backend iterates through this array to process the blocks.
 
-This architecture involves:
--   An enhanced JSON-based representation of the program (sequence of blocks) sent from the frontend.
--   A backend `ProgramOrchestrator` to parse this JSON and manage block-by-block execution.
--   Mapping "Standard Blocks" (e.g., "Say", "Move") to specific Java methods.
--   Executing "Python Blocks" using the `JythonExecutor`.
--   A shared `ProgramContext` object for state management (variables, output) accessible by all blocks.
+For a more Scratch-like experience with advanced features like nested execution in loops and more complex block interactions, a more comprehensive program execution architecture is being developed.
 
-Detailed conceptual notes on this program execution architecture, including JSON structure, block type handling, state management, and output collection, can be found in [DESIGN_NOTES.md](./DESIGN_NOTES.md).
+Detailed conceptual notes on this program execution architecture, including JSON structure, block type handling, state management, and sandboxing, can be found in [DESIGN_NOTES.md](./DESIGN_NOTES.md).
