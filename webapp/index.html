@@ -18,7 +18,14 @@
         <div class="container">
             <div id="block-palette">
                 <h2>Block Palette</h2>
-                <!-- Placeholder for blocks -->
+                <!-- Placeholder for blocks will be managed by JS adding categories -->
+                <div class="palette-category" id="variables-category">
+                    <h4>Variables</h4>
+                    <button id="makeVariableButton">Make a Variable</button>
+                    <div id="variable-palette-blocks">
+                        <!-- Draggable variable reporter blocks will be added here by JS -->
+                    </div>
+                </div>
             </div>
             <div id="script-assembly-area">
                 <h2>Script Assembly</h2>
@@ -29,6 +36,9 @@
             </div>
             <div id="stage-area">
                 <h2>Stage</h2>
+                <div id="stage-variable-monitors-container">
+                    <!-- Variable monitors will be dynamically added here by JS -->
+                </div>
                 <pre id="output-display"></pre> <!-- For displaying program output -->
             </div>
         </div>
@@ -54,6 +64,26 @@
         <h3>Sprites</h3>
         <ul id="sprite-list"></ul>
         <!-- <button id="add-sprite-button">Add Sprite</button> -->
+    </div>
+
+    <!-- Variable Creation Modal -->
+    <div id="variableModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <h3>Make a Variable</h3>
+            <label for="variableNameInput">Variable name:</label>
+            <input type="text" id="variableNameInput" name="variableNameInput" required pattern="^[a-zA-Z_][a-zA-Z0-9_]*$">
+            <small>Must start with a letter or underscore, then letters, numbers, or underscores.</small>
+            <br><br>
+            <label>Scope:</label><br>
+            <input type="radio" id="scopeGlobal" name="variableScope" value="global" checked>
+            <label for="scopeGlobal">For all sprites (global)</label><br>
+            <input type="radio" id="scopeLocal" name="variableScope" value="local">
+            <label for="scopeLocal">For this sprite only</label><br><br>
+            <div class="modal-actions">
+                <button id="confirmVariableButton" class="modal-button save">OK</button>
+                <button id="cancelVariableButton" class="modal-button cancel">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <script src="js/app.js"></script>

@@ -27,6 +27,10 @@ The primary goal is to explore the integration of a visual block metaphor with P
         *   **Switch to costume: Block (Looks):** Prompts with available costumes for the active sprite. Changes the sprite's appearance on the stage.
     *   **Multi-Block Script Execution:** The frontend sends a JSON array of the active sprite's blocks to the server. The server parses this and executes blocks sequentially.
     *   **Aggregated Text Output:** Output from all executed blocks is displayed in the "Stage Area's" text output section.
+*   **Basic Variable System:** Create global or sprite-local variables via a UI dialog (name, scope).
+*   **Variable Blocks:** 'Set [Variable] to [Value]' and 'Change [Variable] by [Value]' blocks for modifying variables.
+*   **Variable Reporters:** Created variables appear as draggable reporter blocks in a 'Variables' palette category.
+*   **Stage Monitors:** Variables can be toggled for display on the stage, showing their name and current value. Monitors update optimistically during script execution.
 *   **Costumes Tab (per Sprite):**
     *   **Client-Side Asset Handling:** Allows users to select local image files for the active sprite.
     *   Thumbnails are displayed. Clicking a thumbnail sets it as the `currentCostumeId` for the active sprite and updates the stage.
@@ -129,7 +133,23 @@ The Java server relies on external JAR files. These need to be manually download
     *   **Running the Program:** Click the "Run Program" button. This executes the script for the active sprite.
     *   **Viewing Output & Stage:** Text output appears in the text area below the stage. Visual changes (sprite position, costume) occur on the stage.
 
-4.  **Working with the "Costumes" Tab (for the active sprite):**
+4.  **Working with Variables (for the active sprite):**
+    *   **Making Variables:** Click the "Make a Variable" button in the "Variables" category of the Block Palette. A dialog will appear.
+        *   Enter a variable name (letters, numbers, underscores; must start with a letter or underscore).
+        *   Choose the scope: "For all sprites (global)" or "For this sprite only" (local to the active sprite).
+        *   Click "OK".
+    *   **Variable Reporters in Palette:** Newly created variables appear as draggable reporter blocks in the "Variables" category. Global variables are shown by name (e.g., `myGlobalVar`). Local variables are prefixed with the sprite name (e.g., `Sprite1:myLocalVar`).
+    *   **Stage Monitors:** Next to each variable reporter in the palette is a checkbox. Check this box to display the variable's name and current value as a "monitor" on the stage. Uncheck to hide it. Monitors update in real-time during script execution (based on client-side optimistic updates).
+    *   **Using "Set [Variable] to [Value]" Block:**
+        *   Drag this block from the "Variables" category to the script assembly area.
+        *   A prompt will ask you to select the variable to set (by its display name or ID from a list of available global and active sprite's local variables).
+        *   A second prompt will ask for the value to set it to. Currently, this must be a literal value (number, text, true/false).
+    *   **Using "Change [Variable] by [Value]" Block:**
+        *   Drag this block to the script assembly area.
+        *   A prompt will ask you to select the variable to change.
+        *   A second prompt will ask for the numeric value to change it by (e.g., `1`, `-5`). If the variable currently holds a non-numeric value, it's treated as `0` before the change. If the variable doesn't exist, it's created with a value of `0` before the change.
+
+5.  **Working with the "Costumes" Tab (for the active sprite):**
     *   Select the "Costumes" tab.
     *   Click "Choose Files" to select local image files.
     *   Thumbnails appear. Clicking a thumbnail sets it as the active sprite's current costume, updating its appearance on the Stage.
@@ -155,7 +175,9 @@ Manual testing is the current approach for verifying frontend and integration fu
 *   **Nesting Implementation:** The Loop block has a visual placeholder for nested blocks, but dropping blocks *into* it or executing nested logic is not yet functional.
 *   **Loop Block Execution:** Backend execution for Loop blocks is a placeholder; it acknowledges the loop and its count but does not execute child blocks.
 *   **No Block Editing After Placement:** Configured blocks in the assembly area cannot be directly edited.
-*   **No State Persistence:** The entire project state (sprites, scripts, assets) is lost on page refresh.
+*   **Variable Reporter Blocks as Inputs:** Using a variable reporter block as an input to another block (e.g., `Set [var1] to [var2]`) is supported by the backend if the JSON is structured correctly, but the UI does not yet allow visually dragging and dropping reporters into input slots of other blocks. Current block input prompts only accept literal values.
+*   **Stage Monitor Synchronization:** Stage monitors reflect client-side optimistic updates. The server's response is an aggregated log; no full variable state is sent back to synchronize after execution (though the server state *is* updated).
+*   **No State Persistence:** The entire project state (sprites, scripts, assets, variables) is lost on page refresh.
 
 ## Future Ideas
 

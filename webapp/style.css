@@ -570,3 +570,165 @@ h2 {
     background-color: #218838;
 }
 */
+
+/* Variable Palette & Modal Styles */
+.palette-category {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ccc;
+}
+.palette-category h4 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+    color: #555;
+}
+#makeVariableButton {
+    padding: 8px 10px;
+    background-color: #5cb85c; /* Green */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: block;
+    width: calc(100% - 2 * 1px); /* Account for potential border or ensure it fits */
+    margin-bottom: 10px;
+    box-sizing: border-box;
+}
+#makeVariableButton:hover {
+    background-color: #4cae4c;
+}
+#variable-palette-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.variable-reporter-block {
+    padding: 5px 10px; /* Adjusted padding */
+    border-radius: 20px; /* More oval shape */
+    background-color: #FF8C1A; /* Orange, similar to Scratch variable blocks */
+    color: white;
+    font-size: 0.85em; /* Slightly larger for readability */
+    text-align: center;
+    cursor: grab; /* For draggable items */
+    min-width: 70px;
+    display: inline-block;
+    margin: 2px; /* Small margin around each reporter */
+    border: 1px solid #e67e00; /* Darker orange border */
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Variable Modal Specific Styles */
+#variableModal .modal-content {
+    max-width: 450px; /* Slightly smaller modal for variable creation */
+}
+#variableModal label {
+    display: inline-block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+}
+#variableModal input[type="text"] {
+    width: calc(100% - 22px); /* Account for padding and border */
+    padding: 10px;
+    margin-bottom: 5px; /* Space before small text */
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1em;
+}
+#variableModal input[type="text"]:invalid {
+    border-color: red;
+    background-color: #fff0f0;
+}
+#variableModal small {
+    display: block;
+    margin-bottom: 15px;
+    font-size: 0.8em;
+    color: #777;
+}
+#variableModal input[type="radio"] {
+    margin-right: 5px;
+}
+#variableModal label[for="scopeGlobal"],
+#variableModal label[for="scopeLocal"] {
+    font-weight: normal; /* Radio labels normal weight */
+    margin-right: 15px;
+}
+
+.modal-actions { /* For variable modal specifically, or can be generic */
+    margin-top: 20px; /* Space above buttons */
+    display: flex;
+    justify-content: flex-end;
+}
+
+.palette-variable-control-block, .assembled-variable-control-block {
+    background-color: #FF8C1A; /* Orange, same as reporter */
+    color: white;
+    padding: 8px; /* More rectangular than oval reporters */
+    border-radius: 4px; /* Standard block shape */
+    margin-bottom: 5px; /* Add some margin if not inherited from .palette-block */
+    /* .assembled-block already provides some common styling like border */
+}
+
+.palette-variable-control-block {
+    /* Inherits .palette-block for cursor, text-align, font-weight, transition, user-select */
+}
+
+.assembled-variable-control-block {
+    border-color: #e67e00; /* Darker orange border to match reporter */
+    /* Inherits .assembled-block for other properties */
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 0.9em;
+}
+
+/* Stage Variable Monitors Styling */
+#stage-variable-monitors-container {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    z-index: 100; /* Ensure it's above sprite visuals */
+    display: flex;
+    flex-direction: column;
+    gap: 4px; /* Space between monitors */
+    align-items: flex-start; /* Align monitors to the left */
+}
+
+.variable-monitor {
+    background-color: rgba(255, 140, 26, 0.85); /* Scratch variable orange, slightly transparent */
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; /* Scratch-like font */
+    font-size: 11px; /* Smaller font for monitors */
+    display: flex;
+    align-items: center; /* Vertically align name and value */
+    gap: 5px;
+    border: 1px solid rgba(0,0,0,0.2);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.variable-monitor-name {
+    font-weight: bold;
+}
+.variable-monitor-value {
+    background-color: white;
+    color: black;
+    padding: 1px 5px;
+    border-radius: 3px;
+    min-width: 15px; /* Ensure some space for value */
+    text-align: center;
+}
+
+/* Styling for Checkbox in Palette (next to variable reporters) */
+.variable-palette-item { /* New container for reporter + checkbox */
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+.variable-palette-item input[type="checkbox"] {
+    margin-right: 5px;
+    cursor: pointer;
+}
+/* Adjust .variable-reporter-block if it had margin-bottom, now parent .variable-palette-item has it */
+.variable-reporter-block {
+     margin-bottom: 0; /* Handled by .variable-palette-item */
+}
