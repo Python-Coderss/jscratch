@@ -81,25 +81,69 @@ The program constructed on the frontend would be serialized into a JSON array of
 ]
 ```
 
+### 2.5 Sprite Data Model (Conceptual)
+
+The application now incorporates a basic concept of sprites, primarily managed on the client-side but with a corresponding Java class for server-side understanding if state were to be fully synchronized or persisted.
+
+*   **Client-Side (`webapp/js/app.js`):**
+    *   `projectSprites`: An array holding all sprite objects for the current session.
+    *   `activeSpriteId`: The ID of the currently selected sprite, whose scripts and assets are being edited/viewed.
+    *   **Sprite Object Structure (JavaScript):**
+        ```javascript
+        {
+            id: String, // Unique ID (e.g., 'sprite_167...')
+            name: String, // e.g., 'Sprite1'
+            x: Number,    // X-coordinate on stage (0 is center)
+            y: Number,    // Y-coordinate on stage (0 is center, positive is up)
+            currentCostumeId: String, // ID of the currently active costume
+            scripts: Array, // Array of block objects (as defined in JSON Program Structure)
+            costumes: [   // Array of costume objects
+                { id: String, name: String, dataURL: String /*Base64 encoded image*/ }
+            ],
+            sounds: [     // Array of sound objects
+                { id: String, name: String, dataURL: String /*Base64 encoded audio*/ }
+            ]
+        }
+        ```
+    *   A default "Sprite1" is created on initialization with a placeholder costume and an empty script list.
+
+*   **Server-Side (`Sprite.java`):**
+    *   The `com.example.Sprite` Java class mirrors this structure (`id`, `name`, `x`, `y`, `currentCostumeId`, `costumes` (List<Map<String, String>>), `sounds` (List<Map<String, String>>)).
+    *   The server initializes a default "sprite1" in its `projectSprites` map. Currently, block actions like "Go to X,Y" and "Switch to costume" on the backend operate on this hardcoded "sprite1".
+
 ### 3. Execution of Block Types
 
-The `ProgramOrchestrator` would use the `type` field of each block to determine how to execute it:
+The `ProgramOrchestrator` (currently part of `ExecuteProgramHandler` in `SimpleHttpServer.java`) uses the `type` field of each block from the input JSON array to determine how to execute it:
 
 *   **Python Blocks (`PYTHON_BLOCK`):**
-    *   The Python code provided in `inputs.CODE` would be extracted.
-    *   This code would be passed to the `JythonExecutor.executeScript(pythonCode)` method.
-    *   The `stdout`, `stderr`, and any exceptions from Jython execution would be captured.
-    *   The Jython environment would be provided access to the `ProgramContext` (see State Management).
+    *   Extracts Python code from `inputs.CODE`.
+    *   Executed via `JythonExecutor.executeScript(pythonCode)`.
+    *   `stdout`, `stderr`, and exceptions are captured and appended to the aggregated output.
+    *   Future: The Jython environment will need access to the `ProgramContext` for the target sprite.
 
-*   **Standard Blocks (e.g., `SAY_BLOCK`, `MOVE_SPRITE_BLOCK`):**
-    *   These represent predefined actions within the application that are implemented directly in Java.
-    *   Each standard block `type` (e.g., "SAY_BLOCK") would map to a specific Java method within the backend (e.g., in the `ProgramOrchestrator` or a dedicated `StandardBlockHandlers` class). For example, `handleSayBlock(inputs, programContext)`.
-    *   The `inputs` object for the block would be passed to this Java method.
-    *   The Java method would perform the action (e.g., append a message to an output buffer in the `ProgramContext`, modify sprite state in the context).
-    *   This direct mapping and execution of Java methods based on block type is how these blocks are "compiled to Java" in this server-side execution model (it's an interpretation rather than bytecode generation).
+*   **Standard Blocks:**
+    *   These are handled by specific Java logic in the backend.
+    *   **`SAY_BLOCK`:**
+        *   Extracts `inputs.TEXT`.
+        *   Server appends a message like `[Output] SAY: <text>` to the aggregated output.
+    *   **`GOTO_XY_BLOCK` (Motion):**
+        *   Frontend: Optimistically updates the `activeSprite.x` and `activeSprite.y` values and calls `renderStage()` for immediate visual feedback.
+        *   Backend: Extracts `inputs.X` and `inputs.Y`. Updates the server-side state of the (currently hardcoded) target sprite (e.g., "sprite1"). Appends a confirmation message to aggregated output.
+    *   **`SWITCH_COSTUME_BLOCK` (Looks):**
+        *   Frontend: Optimistically updates `activeSprite.currentCostumeId` and calls `renderStage()`.
+        *   Backend: Extracts `inputs.COSTUME_ID`. Validates if the costume ID exists for the (currently hardcoded) target sprite. If yes, updates the sprite's `currentCostumeId` on the server. Appends a confirmation or error message to aggregated output.
+    *   This mapping to Java methods or specific logic paths *is* the "compilation to Java" in this context.
 
-*   **Control Flow Blocks (Future - e.g., `REPEAT_BLOCK`, `IF_BLOCK`):**
-    *   These blocks would require more complex logic in their corresponding Java handler methods.
+*   **Control Flow Blocks (`LOOP_BLOCK` - Placeholder Execution):**
+    *   Extracts `inputs.COUNT`.
+    *   Currently, the backend only acknowledges the loop and its count in the aggregated output (e.g., "Loop X times (execution of children not yet implemented)").
+    *   Future: The Java handler for a loop block would need to recursively process its `children` array of blocks. This involves:
+        *   Evaluating `inputs.COUNT`.
+        *   Iterating that many times.
+        *   In each iteration, recursively calling the main block processing logic for the `children` array.
+
+*   **Control Flow Blocks (General Future - e.g., `IF_BLOCK`):**
+    *   These would require more complex logic in their Java handler methods.
     *   For example, a `handleRepeatBlock(inputs, children, programContext)` method would:
         *   Evaluate the `inputs.TIMES` expression.
         *   Loop that many times.
@@ -108,23 +152,24 @@ The `ProgramOrchestrator` would use the `type` field of each block to determine 
 
 ### 4. State Management
 
-A crucial component for making the blocks interact and for the program to have memory is a `ProgramContext` (or `ExecutionContext`) object.
+A crucial component for making the blocks interact and for the program to have memory is a `ProgramContext` (or `ExecutionContext`) object, especially for multi-sprite scenarios.
 
-*   **Shared State:** This Java object would be instantiated at the beginning of a program's execution.
-*   **Passed to Blocks:** It would be passed as an argument to each Java method handling a standard block, and also made available to Jython scripts.
+*   **Shared State:** This Java object would be instantiated at the beginning of a program's execution (or per sprite script execution).
+*   **Target Sprite Context:** For true multi-sprite support, the `ProgramContext` on the backend (when processing a script) will need to include the `spriteId` of the sprite whose script is currently executing. Block handlers like "Go to X,Y" or "Switch Costume" would then operate on this target sprite rather than a hardcoded one. The `projectSprites` map on the server holds the state for all sprites.
+*   **Passed to Blocks:** The context (or relevant parts of it, like the target sprite object) would be passed as an argument to each Java method handling a standard block, and also made available to Jython scripts.
 *   **Contents:**
-    *   **Variables:** A map or similar structure to store user-defined variables created by blocks (e.g., a "Set Variable" block or variables created in a Python script).
-    *   **Output Stream/Buffer:** A way to accumulate output from blocks like "Say" or `print()` statements in Python. This buffer would form part of the final result sent to the client.
-    *   **Sprite/Stage State (Future):** For a true Scratch-like environment, this context would hold information about sprites (position, costume, visibility, etc.) and the stage. Standard blocks would interact with this state.
+    *   **Variables:** A map or similar structure to store user-defined variables (potentially per-sprite or global).
+    *   **Output Stream/Buffer:** A way to accumulate output from blocks like "Say" or `print()` statements in Python. This buffer forms part of the final result sent to the client.
+    *   **Sprite/Stage State:** The `projectSprites` map effectively holds the state for all sprites (position, current costume, etc.). Standard blocks modify this state directly for the target sprite.
     *   **Global Properties:** Potentially other global program properties.
 *   **Jython Interaction:**
-    *   The `ProgramContext` Java object can be exposed to the Jython environment using `PythonInterpreter.set("context", javaContextObject)`.
-    *   Python code can then interact with this Java object's public methods to get/set variables or trigger other Java-defined actions:
+    *   The `ProgramContext` Java object (or the specific target `Sprite` object) can be exposed to the Jython environment using `PythonInterpreter.set("context", javaContextObject)` or `interpreter.set("sprite", currentSpriteObject)`.
+    *   Python code can then interact with this Java object's public methods:
         ```python
         # Example Python code in a block:
-        print(f"Value from Java context: {context.getVariable('some_var')}")
-        context.setVariable('new_py_var', 42)
-        context.triggerSomeJavaAction('hello from python')
+        # print(f"Sprite X: {sprite.getX()}")
+        # sprite.setX(sprite.getX() + 10)
+        # context.setGlobalVariable('score', 100)
         ```
 
 ### 5. Sandboxing Considerations
@@ -205,17 +250,32 @@ This conceptual framework aims to provide a flexible way to execute a mix of pre
 
 ### Client-Side Asset Handling (Costumes & Sounds)
 
-Currently, costume (image) and sound (audio) assets are handled entirely on the client-side:
+Currently, costume (image) and sound (audio) assets are managed entirely on the client-side and associated with the active sprite:
 
-*   **File Selection:** Users select local files using the `<input type="file">` element.
-*   **`FileReader` API:** The JavaScript `FileReader` API is used to read the selected file's content.
-    *   For images (costumes), files are read as Data URLs (`reader.readAsDataURL(file)`).
-    *   For audio (sounds), files are also read as Data URLs.
-*   **Local Storage (In-Memory):**
-    *   The generated Data URLs, along with metadata like filename and a generated ID, are stored in JavaScript arrays within the `app.js` scope (e.g., `currentSpriteCostumes`, `currentSpriteSounds`).
+*   **File Selection:** Users select local files using the `<input type="file">` element within the "Costumes" or "Sounds" tab.
+*   **`FileReader` API:** The JavaScript `FileReader` API reads the selected file's content as a Data URL.
+*   **In-Memory Storage (per Sprite):**
+    *   The generated Data URLs, along with metadata (filename, generated ID), are stored in arrays (`costumes` or `sounds`) within the respective client-side sprite object in the `projectSprites` array.
 *   **Display/Playback:**
-    *   **Costumes:** Image thumbnails are displayed by creating `<img>` elements and setting their `src` attribute to the Data URL.
-    *   **Sounds:** Sounds are played by creating an `Audio` object (`new Audio(dataURL)`) and calling its `play()` method.
-*   **No Server Interaction:** There is no server-side upload, storage, or processing of these assets. They exist only in the browser's memory for the current session. Refreshing the page will clear any uploaded assets.
+    *   **Costumes:** Image thumbnails are displayed by creating `<img>` elements with their `src` set to the Data URL. Clicking a thumbnail updates the active sprite's `currentCostumeId` and triggers a re-render of the stage.
+    *   **Sounds:** Sounds are listed with their names. A "Play" button for each sound uses the Data URL to create an `Audio` object and play it.
+*   **No Server Interaction for Assets:** There is no server-side upload, storage, or processing of these asset files. They exist only in the browser's memory for the current session and are lost on page refresh.
 
 This approach is simple for initial development but has limitations (no persistence, assets not tied to saved projects, potential memory issues with very large files/many assets). Future enhancements would involve server-side asset management.
+
+### Stage Rendering (Client-Side)
+
+The visual stage is rendered on the client-side by the `renderStage()` JavaScript function:
+
+*   **Clearing Stage:** It first clears any existing sprite visuals from the `#stage-area` div.
+*   **Iterating Sprites:** It loops through the `projectSprites` array.
+*   **Sprite Visual Div:** For each sprite, a `div` with class `.sprite-visual` is created.
+*   **Costume Display:**
+    *   It finds the sprite's `currentCostume` based on `currentCostumeId` from its `costumes` array. If not found or invalid, it defaults to the first available costume.
+    *   If the costume has a `dataURL`, an `<img>` element is created, its `src` is set, and it's appended to the sprite's div.
+    *   If no valid costume/dataURL, a placeholder colored div is rendered for the sprite.
+*   **Positioning:**
+    *   The sprite's `(x, y)` coordinates (where (0,0) is stage center, Y positive is up) are converted to CSS `top` and `left` properties.
+    *   This conversion accounts for the stage dimensions and the size of the sprite's visual (currently determined by `img.onload` to get image dimensions, or default for placeholder). The CSS positions the *center* of the sprite visual at the calculated `(left, top)` coordinates.
+    *   `#stage-area` has `position: relative; overflow: hidden;` to act as the container for absolutely positioned sprites.
+*   **Optimistic Updates:** Functions like `setActiveSprite`, changes to sprite properties via blocks (`GOTO_XY_BLOCK`, `SWITCH_COSTUME_BLOCK` in their client-side logic), and costume selection in the "Costumes" tab trigger `renderStage()` to provide immediate visual feedback.

@@ -29,6 +29,12 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONException;
 
+// Additional imports for Sprite management
+import java.util.Map;
+import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList; // Used in setupDefaultState
+
 public class SimpleHttpServer {
 
     private static final String SCRIPTS_DIR_NAME = "scripts";
@@ -37,6 +43,7 @@ public class SimpleHttpServer {
     private static final File WEBAPP_DIR = new File(WEBAPP_DIR_NAME); // File object for webapp directory
     private static final Logger LOGGER = Logger.getLogger(SimpleHttpServer.class.getName());
     private static final JythonExecutor jythonExecutor = new JythonExecutor(); // Initialize JythonExecutor
+    private static final Map<String, Sprite> projectSprites = new ConcurrentHashMap<>(); // For storing sprites
     // Allow alphanumeric characters, underscore, hyphen, and dot.
     private static final Pattern ALLOWED_SCRIPT_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_.-]+$");
 
@@ -58,6 +65,8 @@ public class SimpleHttpServer {
     }
 
     public static void main(String[] args) throws IOException {
+        setupDefaultState(); // Initialize with a default sprite
+
         // Check for scripts directory
         if (!SCRIPTS_DIR.exists() || !SCRIPTS_DIR.isDirectory()) {
             LOGGER.info("Scripts directory '" + SCRIPTS_DIR.getAbsolutePath() + "' not found, attempting to create it.");
@@ -88,7 +97,34 @@ public class SimpleHttpServer {
         server.setExecutor(null); // Creates a default executor
         server.start();
         LOGGER.info("Server started on port 8000. Scripts: " + SCRIPTS_DIR.getAbsolutePath() + ", Webapp: " + WEBAPP_DIR.getAbsolutePath());
+        LOGGER.info("Default sprites initialized: " + projectSprites.keySet());
     }
+
+    private static void setupDefaultState() {
+        // For now, costumes and sounds are metadata lists. Actual data is client-side.
+        // Create a default costume metadata entry
+        Map<String, String> defaultCostumeMeta = new HashMap<>();
+        defaultCostumeMeta.put("id", "default_costume_id"); // Matches client-side placeholder
+        defaultCostumeMeta.put("name", "default");
+        // defaultCostumeMeta.put("fileName", "placeholder.png"); // If we had server-side assets
+
+        List<Map<String, String>> defaultCostumesList = new ArrayList<>();
+        defaultCostumesList.add(defaultCostumeMeta);
+
+        // Create the default sprite
+        Sprite defaultSprite = new Sprite(
+            "sprite1",                  // id
+            "Sprite1",                  // name
+            0,                          // x
+            0,                          // y
+            "default_costume_id",       // currentCostumeId
+            defaultCostumesList,        // costumes list
+            new ArrayList<>()           // empty sounds list
+        );
+        projectSprites.put(defaultSprite.getId(), defaultSprite);
+        LOGGER.info("Default sprite '" + defaultSprite.getName() + "' created with ID '" + defaultSprite.getId() + "'.");
+    }
+
 
     // RootHandler is effectively replaced by StaticFileHandler serving index.html from webapp by default.
     // If a specific "Hello, World!" for / is still needed separate from static files,
@@ -362,6 +398,43 @@ public class SimpleHttpServer {
                             }
                             break;
 
+                        case "SWITCH_COSTUME_BLOCK":
+                            String costumeId = inputs.optString("COSTUME_ID", null);
+                            String costumeNameForLog = inputs.optString("COSTUME_NAME", costumeId); // For logging/messaging
+                            String targetSpriteId_Looks = "sprite1"; // Hardcoded for now
+                            Sprite looksSprite = projectSprites.get(targetSpriteId_Looks);
+
+                            if (costumeId == null || costumeId.isEmpty()) {
+                                aggregatedOutput.append("  Error: No costume ID provided for SWITCH_COSTUME_BLOCK.\n");
+                                LOGGER.warning("No costume ID provided for SWITCH_COSTUME_BLOCK for sprite " + targetSpriteId_Looks);
+                                break; // Skip this block
+                            }
+
+                            if (looksSprite != null) {
+                                boolean costumeExists = false;
+                                for (Map<String, String> costumeMeta : looksSprite.getCostumes()) {
+                                    if (costumeId.equals(costumeMeta.get("id"))) {
+                                        costumeExists = true;
+                                        break;
+                                    }
+                                }
+                                if (costumeExists) {
+                                    looksSprite.setCurrentCostumeId(costumeId);
+                                    String looksMsg = String.format("  Sprite '%s' switched to costume '%s' (ID: %s).\n", looksSprite.getName(), costumeNameForLog, costumeId);
+                                    aggregatedOutput.append(looksMsg);
+                                    LOGGER.info("Executed SWITCH_COSTUME_BLOCK for " + looksSprite.getName() + " to costume ID: " + costumeId);
+                                } else {
+                                    String looksErrorMsg = String.format("  Error: Costume ID '%s' not found for sprite '%s'.\n", costumeId, looksSprite.getName());
+                                    aggregatedOutput.append(looksErrorMsg);
+                                    LOGGER.warning("Costume ID not found: " + costumeId + " for sprite " + looksSprite.getName());
+                                }
+                            } else {
+                                String looksErrorMsg = String.format("  Error: Sprite '%s' not found for SWITCH_COSTUME_BLOCK.\n", targetSpriteId_Looks);
+                                aggregatedOutput.append(looksErrorMsg);
+                                LOGGER.warning("Sprite not found: " + targetSpriteId_Looks + " for SWITCH_COSTUME_BLOCK");
+                            }
+                            break;
+
                         case "SAY_BLOCK":
                             String textToSay = inputs.optString("TEXT", "");
                             LOGGER.info("Executing SAY_BLOCK: " + textToSay);
@@ -374,6 +447,29 @@ public class SimpleHttpServer {
                             aggregatedOutput.append("  Loop ").append(count).append(" times (Note: execution of children not yet implemented).\n");
                             // Future: process block.optJSONArray("children") recursively here
                             // For now, just acknowledging the block.
+                            break;
+
+                        case "GOTO_XY_BLOCK":
+                            double xVal = inputs.optDouble("X", 0.0); // Default to 0.0 if not specified or invalid
+                            double yVal = inputs.optDouble("Y", 0.0);
+
+                            // For now, assume we operate on the default/first sprite ("sprite1")
+                            // In a multi-sprite context, the block would need to specify a target sprite ID,
+                            // or it would apply to a globally "active" or "current" sprite for that user session.
+                            String targetSpriteId = "sprite1"; // Hardcoded for now
+                            Sprite currentSprite = projectSprites.get(targetSpriteId);
+
+                            if (currentSprite != null) {
+                                currentSprite.setX(xVal);
+                                currentSprite.setY(yVal);
+                                String msg = String.format("  Sprite '%s' moved to X: %.2f, Y: %.2f.\n", currentSprite.getName(), xVal, yVal);
+                                aggregatedOutput.append(msg);
+                                LOGGER.info("Executed GOTO_XY_BLOCK for " + currentSprite.getName() + " to X=" + xVal + ", Y=" + yVal);
+                            } else {
+                                String errorMsg = String.format("  Error: Sprite '%s' not found for GOTO_XY_BLOCK.\n", targetSpriteId);
+                                aggregatedOutput.append(errorMsg);
+                                LOGGER.warning("Sprite not found: " + targetSpriteId + " for GOTO_XY_BLOCK");
+                            }
                             break;
 
                         default:

@@ -9,25 +9,34 @@ The primary goal is to explore the integration of a visual block metaphor with P
 ## Features (Current State)
 
 *   **Web-Based Interface:** Accessible via a modern web browser with a tabbed interface ("Scripts", "Costumes", "Sounds").
+*   **Basic Sprite System:**
+    *   A default "Sprite1" is created on application startup (both client and server-side conceptual model).
+    *   Scripts, costumes, and sounds are managed in the context of this active sprite.
+    *   A "Sprites" panel displays the list of sprites (currently just "Sprite1") and allows selection.
+*   **Visual Stage:**
+    *   A 480x360 pixel stage area where sprites are rendered.
+    *   Sprites display their current costume at their X, Y coordinates ((0,0) is center, Y positive is up, similar to Scratch).
 *   **Scripts Tab:**
-    *   **Three-Panel Layout:** Block Palette, Script Assembly Area, and Stage Area.
-    *   **Drag-and-Drop Interface:** Blocks (Python, Say, Loop) can be dragged from the palette to the script assembly area, allowing for vertical stacking to form a program.
-    *   **Block Configuration:**
-        *   **Python Code Block:** Opens a modal for multi-line Python code input. Executed using an embedded Jython interpreter on the server.
-        *   **Say Block:** Prompts for text input. Processed by the server to simulate a "say" action.
-        *   **Loop Block:** Prompts for a repetition count. Rendered with a visual placeholder for nested blocks (nesting execution not yet implemented).
-    *   **Multi-Block Program Execution:** The frontend constructs a JSON array representing the sequence of assembled blocks. This is sent to the server, which parses it using `org.json` and executes blocks sequentially.
-    *   **Aggregated Output:** Output from all executed blocks (or error messages) is collected and displayed in the "Stage Area".
-*   **Costumes Tab:**
-    *   **Client-Side Asset Handling:** Allows users to select local image files.
-    *   Thumbnails of selected images are displayed on the page. (No server upload/storage yet).
-*   **Sounds Tab:**
-    *   **Client-Side Asset Handling:** Allows users to select local audio files.
-    *   Uploaded sounds are listed with their names and a "Play" button to play them directly in the browser using HTML5 Audio. (No server upload/storage yet).
+    *   **Three-Panel Layout:** Block Palette, Script Assembly Area, and Stage Area (text output).
+    *   **Drag-and-Drop Interface:** Blocks can be dragged from the palette to the script assembly area for the active sprite, allowing vertical stacking.
+    *   **Block Configuration & Types:**
+        *   **Python Code Block:** Opens a modal for Python code input. Executed server-side using an embedded Jython interpreter.
+        *   **Say Block (Looks):** Prompts for text. Server simulates a "say" action, output in Stage.
+        *   **Loop Block (Control):** Prompts for a count. Rendered with a visual placeholder for nested blocks (execution of children not yet implemented).
+        *   **Go to X: Y: Block (Motion):** Prompts for X and Y coordinates. Affects the active sprite's position on the stage.
+        *   **Switch to costume: Block (Looks):** Prompts with available costumes for the active sprite. Changes the sprite's appearance on the stage.
+    *   **Multi-Block Script Execution:** The frontend sends a JSON array of the active sprite's blocks to the server. The server parses this and executes blocks sequentially.
+    *   **Aggregated Text Output:** Output from all executed blocks is displayed in the "Stage Area's" text output section.
+*   **Costumes Tab (per Sprite):**
+    *   **Client-Side Asset Handling:** Allows users to select local image files for the active sprite.
+    *   Thumbnails are displayed. Clicking a thumbnail sets it as the `currentCostumeId` for the active sprite and updates the stage.
+*   **Sounds Tab (per Sprite):**
+    *   **Client-Side Asset Handling:** Allows users to select local audio files for the active sprite.
+    *   Sounds are listed with a "Play" button for in-browser playback.
 *   **Server-Side Operations:**
-    *   Lightweight Java HTTP server handles static file serving (HTML, CSS, JS) and API requests for program execution.
-    *   Server-side logging (`server.log`) records important events, requests, and errors.
-*   **Basic Script Runner (Legacy):** Retains a `/run/<script_name>` endpoint for executing pre-existing shell scripts from the `scripts/` directory via external process execution.
+    *   Java HTTP server for static files and API requests.
+    *   Server-side logging (`server.log`).
+*   **Basic Script Runner (Legacy):** Retains a `/run/<script_name>` endpoint.
 
 ## Directory Structure
 
@@ -102,30 +111,33 @@ The Java server relies on external JAR files. These need to be manually download
 
 ## How to Use (Current Functionality)
 
-1.  **Open the Application:** Navigate to `http://localhost:8000/` in your browser. You will see the "Scripts" tab by default.
+1.  **Open the Application:** Navigate to `http://localhost:8000/` in your browser. The "Scripts" tab is active by default. A default "Sprite1" is automatically created and selected.
 
-2.  **Working with the "Scripts" Tab:**
-    *   **Adding Blocks:** Drag blocks ("Python Code Block", "Say Block", "Loop Block") from the "Block Palette" (left panel) to the "Script Assembly Area" (middle panel).
+2.  **Sprite Context:**
+    *   The "Sprites" panel (usually below the stage or main content area) lists available sprites. Currently, only "Sprite1" exists.
+    *   All script blocks added, costumes uploaded, and sounds uploaded are associated with the currently **active sprite** (which is "Sprite1" by default).
+
+3.  **Working with the "Scripts" Tab (for the active sprite):**
+    *   **Adding Blocks:** Drag blocks ("Python Code Block", "Say Block", "Loop Block", "Go to X: Y:", "Switch to costume:") from the "Block Palette" (left panel) to the "Script Assembly Area" (middle panel). Blocks will be added to the script of the active sprite.
     *   **Configuring Blocks:**
-        *   **Python Code Block:** When a Python block is dropped, a modal dialog will appear. Enter your Python code and click "Save Python."
-        *   **Say Block:** When a Say block is dropped, a prompt dialog will appear. Enter the text you want the program to "say" and click "OK."
-        *   **Loop Block:** When a Loop block is dropped, a prompt dialog will appear. Enter the number of repetitions (e.g., 3) and click "OK."
-    *   **Viewing Assembled Program:** The configured blocks will appear stacked in the "Script Assembly Area."
-    *   **Running the Program:** Click the "Run Program" button (usually at the top of the Script Assembly Area).
-    *   **Viewing Output:** The aggregated output from all executed blocks (Python script output, simulated "Say" messages, Loop block acknowledgments) will be displayed in the "Stage" area (right panel).
+        *   **Python Code Block:** On drop, a modal appears. Enter Python code, click "Save Python."
+        *   **Say Block:** On drop, a prompt appears. Enter text to "say," click "OK."
+        *   **Loop Block:** On drop, a prompt appears. Enter repetitions (e.g., 3), click "OK."
+        *   **Go to X: Y: Block:** On drop, prompts for X then Y coordinates. Enter numbers, click "OK." This affects the active sprite's position on the Stage.
+        *   **Switch to costume: Block:** On drop, a prompt lists available costumes for the active sprite (by name/ID). Enter the name or ID of the desired costume. This changes the active sprite's appearance on the Stage. (Upload costumes first via the "Costumes" tab).
+    *   **Viewing Assembled Program:** Blocks appear stacked in the "Script Assembly Area."
+    *   **Running the Program:** Click the "Run Program" button. This executes the script for the active sprite.
+    *   **Viewing Output & Stage:** Text output appears in the text area below the stage. Visual changes (sprite position, costume) occur on the stage.
 
-3.  **Working with the "Costumes" Tab:**
-    *   Click on the "Costumes" tab.
-    *   Click the "Choose Files" button (or similar, depending on your browser for `<input type="file">`).
-    *   Select one or more image files from your local system.
-    *   Thumbnails of the selected images will appear in the "costume-thumbnail-list" area.
+4.  **Working with the "Costumes" Tab (for the active sprite):**
+    *   Select the "Costumes" tab.
+    *   Click "Choose Files" to select local image files.
+    *   Thumbnails appear. Clicking a thumbnail sets it as the active sprite's current costume, updating its appearance on the Stage.
 
-4.  **Working with the "Sounds" Tab:**
-    *   Click on the "Sounds" tab.
-    *   Click the "Choose Files" button.
-    *   Select one or more audio files from your local system.
-    *   Each uploaded sound will be listed with its name and a "Play" button.
-    *   Click the "Play" button next to a sound's name to hear it.
+5.  **Working with the "Sounds" Tab (for the active sprite):**
+    *   Select the "Sounds" tab.
+    *   Click "Choose Files" to select local audio files.
+    *   Sounds are listed with a "Play" button. Click to play.
 
 ## Testing
 
@@ -135,16 +147,15 @@ Manual testing is the current approach for verifying frontend and integration fu
 
 ## Known Issues & Limitations
 
-*   **Drag-and-Drop Limitations:** Drag-and-drop currently only supports adding new blocks to the end of the script. Reordering or deleting individual blocks from the assembly area is not yet implemented.
-*   **Nesting Placeholder:** The Loop block displays a visual area for nested blocks, but dropping blocks *into* this area (i.e., actual nesting) is not yet functional.
-*   **Client-Side Assets Only:** Costume and Sound assets are handled entirely on the client-side (using Data URLs and HTML5 Audio respectively). They are not uploaded to the server or saved with any project data. Refreshing the page will clear them.
-*   **No Sprite Concept:** There is no explicit "sprite" or character that costumes and sounds are associated with; they are currently global asset lists for the application instance.
-*   **Loop Block Execution:** Backend execution for Loop blocks is a placeholder; it acknowledges the loop and its count but does not yet execute any child blocks (as nesting is not implemented).
-*   **Sequential Execution Only:** Blocks in the main script area are executed in the order they appear.
-*   **No Block Editing After Placement:** Once a block is configured (e.g., Python code saved, Say text entered), it cannot be directly edited in the assembly area. To change it, you would typically delete it (if implemented) and add a new one.
-*   **Basic Error Reporting:** Python script errors (via Jython) are displayed, but the formatting is basic.
-*   **No State Persistence:** The assembled program, uploaded costumes, and sounds are not saved if you refresh the page.
-*   **Security of `/run/` endpoint:** The legacy `/run/<script_name>` endpoint directly executes scripts from the `scripts/` directory. Ensure only trusted scripts are placed there.
+*   **Backend Sprite Targeting:** Backend execution for "Go to X:Y:" and "Switch to costume:" blocks currently targets a hardcoded "sprite1". True multi-sprite execution context (knowing which sprite's script is running and applying actions to *that specific* sprite on the backend) is not yet fully implemented.
+*   **Client-Side Optimistic Updates:** Sprite position and costume changes are shown immediately on the frontend (optimistic update). The server updates its state for "sprite1". The server's response is an aggregated log; it does not yet send back the authoritative full state of all sprites.
+*   **Sprite Management UI:** Only a single, default "Sprite1" is created at startup. There is no UI for adding new sprites, deleting existing ones, or renaming them.
+*   **Asset Persistence & Scope:** Costumes and Sounds are client-side only (using Data URLs, stored in JavaScript arrays per sprite for the session). They are not saved on the server or persisted if the page is refreshed.
+*   **Drag-and-Drop Limitations:** Currently supports adding blocks to the end of the active sprite's script. Reordering or deleting blocks is not yet implemented.
+*   **Nesting Implementation:** The Loop block has a visual placeholder for nested blocks, but dropping blocks *into* it or executing nested logic is not yet functional.
+*   **Loop Block Execution:** Backend execution for Loop blocks is a placeholder; it acknowledges the loop and its count but does not execute child blocks.
+*   **No Block Editing After Placement:** Configured blocks in the assembly area cannot be directly edited.
+*   **No State Persistence:** The entire project state (sprites, scripts, assets) is lost on page refresh.
 
 ## Future Ideas
 
