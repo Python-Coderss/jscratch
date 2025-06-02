@@ -44,6 +44,7 @@ public class SimpleHttpServer {
     private static final Logger LOGGER = Logger.getLogger(SimpleHttpServer.class.getName());
     private static final JythonExecutor jythonExecutor = new JythonExecutor(); // Initialize JythonExecutor
     private static final Map<String, Sprite> projectSprites = new ConcurrentHashMap<>(); // For storing sprites
+    private static final Map<String, Object> projectGlobalVariables = new ConcurrentHashMap<>(); // For global variables
     // Allow alphanumeric characters, underscore, hyphen, and dot.
     private static final Pattern ALLOWED_SCRIPT_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_.-]+$");
 
@@ -123,6 +124,16 @@ public class SimpleHttpServer {
         );
         projectSprites.put(defaultSprite.getId(), defaultSprite);
         LOGGER.info("Default sprite '" + defaultSprite.getName() + "' created with ID '" + defaultSprite.getId() + "'.");
+
+        // Pre-populate example variables
+        projectGlobalVariables.put("global_score", 0);
+        projectGlobalVariables.put("global_message", "Hello Everyone!");
+
+        if (defaultSprite != null) { // Should not be null here
+            defaultSprite.setLocalVariable("my_sprite_var", 100);
+            defaultSprite.setLocalVariable("sprite_greeting", "Hi from Sprite1");
+            LOGGER.info("Pre-populated global and local variables for default sprite.");
+        }
     }
 
 
@@ -327,6 +338,76 @@ public class SimpleHttpServer {
     }
 
     static class ExecuteProgramHandler implements HttpHandler {
+
+        // Helper method to resolve input values, which might be literals or variable reporters
+        private Object resolveInputValue(JSONObject parentInputs, String inputKey, String targetSpriteId, StringBuilder aggregatedOutput) {
+            Object rawValue = parentInputs.opt(inputKey);
+
+            if (rawValue instanceof JSONObject) {
+                JSONObject reporter = (JSONObject) rawValue;
+                if ("VARIABLE".equals(reporter.optString("reporterType"))) {
+                    String varName = reporter.optString("name");
+                    String varScope = reporter.optString("scope", "global");
+                    Object varValue = null;
+                    boolean found = false;
+
+                    if ("global".equals(varScope)) {
+                        if (projectGlobalVariables.containsKey(varName)) {
+                            varValue = projectGlobalVariables.get(varName);
+                            found = true;
+                        }
+                    } else { // "local"
+                        Sprite sprite = projectSprites.get(targetSpriteId);
+                        if (sprite != null) {
+                            // Check local directly, assuming localVariables map exists and is up-to-date
+                            varValue = sprite.getLocalVariable(varName);
+                            if (sprite.getAllLocalVariables().containsKey(varName)) { // Check if key exists even if value is null
+                                found = true;
+                            }
+                        } else {
+                            LOGGER.warning("resolveInputValue: Target sprite '" + targetSpriteId + "' not found for local variable '" + varName + "'.");
+                            aggregatedOutput.append(String.format("  Error: Sprite '%s' not found for local variable '%s'.\n", targetSpriteId, varName));
+                            return 0; // Default value for unresolved local variable from missing sprite
+                        }
+                    }
+
+                    if (found) {
+                        LOGGER.info(String.format("Resolved variable '%s' (scope: %s) to value: %s", varName, varScope, varValue));
+                        return varValue; // Could be null if variable exists but has null value
+                    } else {
+                        LOGGER.warning(String.format("resolveInputValue: Variable '%s' (scope: %s) not found.", varName, varScope));
+                        aggregatedOutput.append(String.format("  Error: Variable '%s' (scope: %s) not found.\n", varName, varScope));
+                        return 0; // Default value for unfound variables (Scratch-like behavior)
+                    }
+                }
+            }
+
+            // If not a variable reporter, treat as literal and parse
+            if (rawValue instanceof String) {
+                String valueStr = (String) rawValue;
+                if (valueStr.matches("-?\\d+(\\.\\d+)?")) {
+                    try {
+                        double doubleVal = Double.parseDouble(valueStr);
+                        if (doubleVal == (long) doubleVal) return (long) doubleVal;
+                        return doubleVal;
+                    } catch (NumberFormatException nfe) { /* Fall through to return as string */ }
+                } else if (valueStr.equalsIgnoreCase("true")) {
+                    return true;
+                } else if (valueStr.equalsIgnoreCase("false")) {
+                    return false;
+                }
+                return valueStr; // Return as string if no other parsing fits
+            } else if (rawValue instanceof Number || rawValue instanceof Boolean) {
+                return rawValue; // Already parsed by JSONObject
+            } else if (rawValue == null || JSONObject.NULL.equals(rawValue)) {
+                return null; // Or a suitable default like "" or 0
+            }
+
+            // Default: return as string or a default value if rawValue is not a recognized type
+            return (rawValue != null) ? rawValue.toString() : "";
+        }
+
+
         @Override
         public void handle(HttpExchange t) throws IOException {
             String requestPath = t.getRequestURI().getPath();
@@ -377,101 +458,200 @@ public class SimpleHttpServer {
                     aggregatedOutput.append("Block ").append(i + 1).append(" (").append(blockType).append("):\n");
 
                     switch (blockType) {
-                        case "PYTHON_BLOCK":
-                            String pythonCode = inputs.optString("CODE", ""); // Default to empty string
+                        case "PYTHON_BLOCK": {
+                            String pythonCode = inputs.optString("CODE", "");
                             if (pythonCode.trim().isEmpty()) {
                                 aggregatedOutput.append("  Error: Python code was empty.\n");
-                                LOGGER.warning("Empty Python code received for a PYTHON_BLOCK in program array.");
-                                continue; // Skip this block, process next
+                                LOGGER.warning("Empty Python code for PYTHON_BLOCK.");
+                                continue;
                             }
                             LOGGER.info("Executing PYTHON_BLOCK via Jython.");
                             JythonExecutor.ExecutionResult result = jythonExecutor.executeScript(pythonCode);
-                            // Indent the result for better readability in aggregated output
                             String[] lines = result.toString().split("\n");
-                            for(String line : lines) {
+                            for (String line : lines) {
                                 aggregatedOutput.append("  ").append(line).append("\n");
                             }
                             if (result.hasError()) {
-                                LOGGER.warning("Jython execution for PYTHON_BLOCK completed with errors/exceptions.");
-                            } else {
-                                LOGGER.info("Jython execution for PYTHON_BLOCK completed successfully.");
+                                LOGGER.warning("Jython execution for PYTHON_BLOCK had errors.");
                             }
                             break;
+                        }
+                        case "CHANGE_VARIABLE_BLOCK": {
+                            String varNameChange = inputs.optString("VARIABLE_NAME", null);
+                            String varScopeChange = inputs.optString("VARIABLE_SCOPE", "global");
+                            // VALUE to change by can itself be a variable or a literal
+                            // Pass aggregatedOutput to resolveInputValue so it can log errors there
+                            Object resolvedValueToChangeBy = resolveInputValue(inputs, "VALUE", "sprite1", aggregatedOutput); // Assuming "sprite1" for now
 
-                        case "SWITCH_COSTUME_BLOCK":
-                            String costumeId = inputs.optString("COSTUME_ID", null);
-                            String costumeNameForLog = inputs.optString("COSTUME_NAME", costumeId); // For logging/messaging
-                            String targetSpriteId_Looks = "sprite1"; // Hardcoded for now
+                            if (varNameChange == null || varNameChange.trim().isEmpty()) {
+                                aggregatedOutput.append("  Error: Variable name not provided for CHANGE_VARIABLE_BLOCK.\n");
+                                LOGGER.warning("Variable name not provided for CHANGE_VARIABLE_BLOCK");
+                                break;
+                            }
+
+                            double numValueToChangeBy;
+                            if (resolvedValueToChangeBy instanceof Number) {
+                                numValueToChangeBy = ((Number) resolvedValueToChangeBy).doubleValue();
+                            } else {
+                                try {
+                                    numValueToChangeBy = Double.parseDouble(String.valueOf(resolvedValueToChangeBy));
+                                } catch (NumberFormatException e) {
+                                    aggregatedOutput.append(String.format("  Error: Value for CHANGE_VARIABLE_BLOCK ('%s') on variable '%s' is not a number.\n", String.valueOf(resolvedValueToChangeBy), varNameChange));
+                                    LOGGER.warning(String.format("Non-numeric value '%s' used in CHANGE_VARIABLE for variable '%s'", String.valueOf(resolvedValueToChangeBy), varNameChange));
+                                    break;
+                                }
+                            }
+
+                            Map<String, Object> targetMapChange = null;
+                            // Sprite targetSpriteChange = null; // Not strictly needed if only using targetMapChange
+                            String logScopeDisplayChange = "Global"; // For logging
+
+                            if (varScopeChange.equals("global")) {
+                                targetMapChange = SimpleHttpServer.this.projectGlobalVariables;
+                            } else {
+                                String targetSpriteIdChange = "sprite1"; // Hardcoded for now
+                                Sprite spriteForChange = SimpleHttpServer.this.projectSprites.get(targetSpriteIdChange);
+                                if (spriteForChange != null) {
+                                    targetMapChange = spriteForChange.getAllLocalVariables();
+                                    logScopeDisplayChange = "Local for " + spriteForChange.getName();
+                                } else {
+                                    aggregatedOutput.append(String.format("  Error: Sprite '%s' not found for local variable '%s' in CHANGE block.\n", targetSpriteIdChange, varNameChange));
+                                    LOGGER.warning("Sprite not found for CHANGE_VARIABLE (local): " + targetSpriteIdChange);
+                                    break;
+                                }
+                            }
+
+                            if (targetMapChange != null) {
+                                Object currentValueObj = targetMapChange.get(varNameChange);
+                                double currentNumericValue = 0;
+                                if (currentValueObj instanceof Number) {
+                                    currentNumericValue = ((Number) currentValueObj).doubleValue();
+                                } else if (currentValueObj != null && !String.valueOf(currentValueObj).isEmpty()) { // check if not null and not empty string
+                                    try {
+                                        currentNumericValue = Double.parseDouble(String.valueOf(currentValueObj));
+                                    } catch (NumberFormatException e) {
+                                        // Variable exists but isn't a number. Scratch treats as 0 in 'change by'.
+                                        LOGGER.warning(String.format("Variable '%s' (%s) current value ('%s') is not a number, treating as 0 for change op.", varNameChange, logScopeDisplayChange, currentValueObj));
+                                    }
+                                }
+                                // If variable doesn't exist (currentValueObj is null), Scratch creates it and treats its value as 0 for 'change by'.
+
+                                double newValue = currentNumericValue + numValueToChangeBy;
+                                targetMapChange.put(varNameChange, newValue);
+
+                                aggregatedOutput.append(String.format("  %s variable '%s' changed by %s, new value is %s.\n", logScopeDisplayChange, varNameChange, numValueToChangeBy, newValue));
+                                LOGGER.info(String.format("Changed %s variable '%s' by %s to %s", logScopeDisplayChange, varNameChange, numValueToChangeBy, newValue));
+                            }
+                            break;
+                        }
+                        case "SET_VARIABLE_BLOCK": {
+                            String varNameSet = inputs.optString("VARIABLE_NAME", null);
+                            String varScopeSet = inputs.optString("VARIABLE_SCOPE", "global");
+                            // Resolve the VALUE input, which might be a literal or a variable reporter
+                            Object valueToSet = resolveInputValue(inputs, "VALUE", "sprite1", aggregatedOutput); // Assuming "sprite1" for now
+
+                            if (varNameSet == null || varNameSet.trim().isEmpty()) {
+                                aggregatedOutput.append("  Error: Variable name not provided for SET_VARIABLE_BLOCK.\n");
+                                LOGGER.warning("Variable name missing in SET_VARIABLE_BLOCK.");
+                                continue;
+                            }
+
+                            if (varScopeSet.equals("global")) {
+                                projectGlobalVariables.put(varNameSet, valueToSet);
+                                aggregatedOutput.append(String.format("  Global variable '%s' set to %s.\n", varNameSet, valueToSet));
+                                LOGGER.info(String.format("Set global variable '%s' to %s", varNameSet, valueToSet));
+                            } else { // "local"
+                                String targetSpriteIdSet = "sprite1"; // Hardcoded
+                                Sprite localSpriteSet = projectSprites.get(targetSpriteIdSet);
+                                if (localSpriteSet != null) {
+                                    localSpriteSet.setLocalVariable(varNameSet, valueToSet);
+                                    aggregatedOutput.append(String.format("  Local variable '%s' for sprite '%s' set to %s.\n", varNameSet, localSpriteSet.getName(), valueToSet));
+                                    LOGGER.info(String.format("Set local variable '%s' for sprite '%s' to %s", varNameSet, localSpriteSet.getName(), valueToSet));
+                                } else {
+                                    aggregatedOutput.append(String.format("  Error: Sprite '%s' not found for setting local variable '%s'.\n", targetSpriteIdSet, varNameSet));
+                                    LOGGER.warning("Sprite not found for SET_VARIABLE_BLOCK (local): " + targetSpriteIdSet);
+                                }
+                            }
+                            break;
+                        }
+                        case "SWITCH_COSTUME_BLOCK": {
+                            String costumeId = inputs.optString("COSTUME_ID", null); // Assuming direct costume ID for now
+                            String costumeNameForLog = inputs.optString("COSTUME_NAME", costumeId);
+                            String targetSpriteId_Looks = "sprite1"; // Hardcoded
                             Sprite looksSprite = projectSprites.get(targetSpriteId_Looks);
 
                             if (costumeId == null || costumeId.isEmpty()) {
-                                aggregatedOutput.append("  Error: No costume ID provided for SWITCH_COSTUME_BLOCK.\n");
-                                LOGGER.warning("No costume ID provided for SWITCH_COSTUME_BLOCK for sprite " + targetSpriteId_Looks);
-                                break; // Skip this block
+                                aggregatedOutput.append("  Error: No costume ID for SWITCH_COSTUME_BLOCK.\n");
+                                LOGGER.warning("Costume ID missing in SWITCH_COSTUME_BLOCK.");
+                                continue;
                             }
-
                             if (looksSprite != null) {
-                                boolean costumeExists = false;
-                                for (Map<String, String> costumeMeta : looksSprite.getCostumes()) {
-                                    if (costumeId.equals(costumeMeta.get("id"))) {
-                                        costumeExists = true;
-                                        break;
-                                    }
-                                }
+                                boolean costumeExists = looksSprite.getCostumes().stream().anyMatch(c -> costumeId.equals(c.get("id")));
                                 if (costumeExists) {
                                     looksSprite.setCurrentCostumeId(costumeId);
-                                    String looksMsg = String.format("  Sprite '%s' switched to costume '%s' (ID: %s).\n", looksSprite.getName(), costumeNameForLog, costumeId);
-                                    aggregatedOutput.append(looksMsg);
-                                    LOGGER.info("Executed SWITCH_COSTUME_BLOCK for " + looksSprite.getName() + " to costume ID: " + costumeId);
+                                    aggregatedOutput.append(String.format("  Sprite '%s' switched to costume '%s'.\n", looksSprite.getName(), costumeNameForLog));
+                                    LOGGER.info("Executed SWITCH_COSTUME_BLOCK for " + looksSprite.getName() + " to " + costumeNameForLog);
                                 } else {
-                                    String looksErrorMsg = String.format("  Error: Costume ID '%s' not found for sprite '%s'.\n", costumeId, looksSprite.getName());
-                                    aggregatedOutput.append(looksErrorMsg);
-                                    LOGGER.warning("Costume ID not found: " + costumeId + " for sprite " + looksSprite.getName());
+                                    aggregatedOutput.append(String.format("  Error: Costume ID '%s' not found for sprite '%s'.\n", costumeId, looksSprite.getName()));
+                                    LOGGER.warning("Costume ID " + costumeId + " not found for " + looksSprite.getName());
                                 }
                             } else {
-                                String looksErrorMsg = String.format("  Error: Sprite '%s' not found for SWITCH_COSTUME_BLOCK.\n", targetSpriteId_Looks);
-                                aggregatedOutput.append(looksErrorMsg);
-                                LOGGER.warning("Sprite not found: " + targetSpriteId_Looks + " for SWITCH_COSTUME_BLOCK");
+                                aggregatedOutput.append(String.format("  Error: Sprite '%s' not found for SWITCH_COSTUME_BLOCK.\n", targetSpriteId_Looks));
+                                LOGGER.warning("Sprite not found for SWITCH_COSTUME_BLOCK: " + targetSpriteId_Looks);
                             }
                             break;
-
-                        case "SAY_BLOCK":
-                            String textToSay = inputs.optString("TEXT", "");
+                        }
+                        case "SAY_BLOCK": {
+                            Object sayValueRaw = resolveInputValue(inputs, "TEXT", "sprite1", aggregatedOutput);
+                            String textToSay = String.valueOf(sayValueRaw); // Convert resolved value to String
                             LOGGER.info("Executing SAY_BLOCK: " + textToSay);
                             aggregatedOutput.append("  [Output] SAY: ").append(textToSay).append("\n");
                             break;
-
-                        case "LOOP_BLOCK":
-                            int count = inputs.optInt("COUNT", 0);
+                        }
+                        case "LOOP_BLOCK": {
+                            Object countRaw = resolveInputValue(inputs, "COUNT", "sprite1", aggregatedOutput);
+                            int count = 0;
+                            if (countRaw instanceof Number) {
+                                count = ((Number) countRaw).intValue();
+                            } else {
+                                try { count = Integer.parseInt(String.valueOf(countRaw)); }
+                                catch (NumberFormatException e) {
+                                    aggregatedOutput.append("  Error: Loop count was not a valid number ('"+countRaw+"').\n");
+                                    LOGGER.warning("Invalid loop count: " + countRaw);
+                                    continue;
+                                }
+                            }
                             LOGGER.info("Encountered LOOP_BLOCK with count: " + count);
                             aggregatedOutput.append("  Loop ").append(count).append(" times (Note: execution of children not yet implemented).\n");
-                            // Future: process block.optJSONArray("children") recursively here
-                            // For now, just acknowledging the block.
                             break;
+                        }
+                        case "GOTO_XY_BLOCK": {
+                            Object xValRaw = resolveInputValue(inputs, "X", "sprite1", aggregatedOutput);
+                            Object yValRaw = resolveInputValue(inputs, "Y", "sprite1", aggregatedOutput);
+                            double xVal = 0.0, yVal = 0.0;
 
-                        case "GOTO_XY_BLOCK":
-                            double xVal = inputs.optDouble("X", 0.0); // Default to 0.0 if not specified or invalid
-                            double yVal = inputs.optDouble("Y", 0.0);
+                            try {
+                                xVal = (xValRaw instanceof Number) ? ((Number)xValRaw).doubleValue() : Double.parseDouble(String.valueOf(xValRaw));
+                                yVal = (yValRaw instanceof Number) ? ((Number)yValRaw).doubleValue() : Double.parseDouble(String.valueOf(yValRaw));
+                            } catch (NumberFormatException e) {
+                                aggregatedOutput.append("  Error: Invalid coordinate for GOTO_XY_BLOCK (X: '"+xValRaw+"', Y: '"+yValRaw+"').\n");
+                                LOGGER.warning("Invalid coordinates for GOTO_XY: X="+xValRaw+", Y="+yValRaw);
+                                continue;
+                            }
 
-                            // For now, assume we operate on the default/first sprite ("sprite1")
-                            // In a multi-sprite context, the block would need to specify a target sprite ID,
-                            // or it would apply to a globally "active" or "current" sprite for that user session.
-                            String targetSpriteId = "sprite1"; // Hardcoded for now
+                            String targetSpriteId = "sprite1"; // Hardcoded
                             Sprite currentSprite = projectSprites.get(targetSpriteId);
-
                             if (currentSprite != null) {
                                 currentSprite.setX(xVal);
                                 currentSprite.setY(yVal);
-                                String msg = String.format("  Sprite '%s' moved to X: %.2f, Y: %.2f.\n", currentSprite.getName(), xVal, yVal);
-                                aggregatedOutput.append(msg);
-                                LOGGER.info("Executed GOTO_XY_BLOCK for " + currentSprite.getName() + " to X=" + xVal + ", Y=" + yVal);
+                                aggregatedOutput.append(String.format("  Sprite '%s' moved to X: %.2f, Y: %.2f.\n", currentSprite.getName(), xVal, yVal));
+                                LOGGER.info(String.format("Executed GOTO_XY_BLOCK for %s to X=%.2f, Y=%.2f", currentSprite.getName(), xVal, yVal));
                             } else {
-                                String errorMsg = String.format("  Error: Sprite '%s' not found for GOTO_XY_BLOCK.\n", targetSpriteId);
-                                aggregatedOutput.append(errorMsg);
-                                LOGGER.warning("Sprite not found: " + targetSpriteId + " for GOTO_XY_BLOCK");
+                                aggregatedOutput.append(String.format("  Error: Sprite '%s' not found for GOTO_XY_BLOCK.\n", targetSpriteId));
+                                LOGGER.warning("Sprite not found for GOTO_XY_BLOCK: " + targetSpriteId);
                             }
                             break;
-
+                        }
                         default:
                             LOGGER.warning("Unknown block type encountered: " + blockType);
                             aggregatedOutput.append("  Error: Unknown block type '").append(blockType).append("'.\n");

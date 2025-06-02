@@ -111,6 +111,26 @@ The application now incorporates a basic concept of sprites, primarily managed o
     *   The `com.example.Sprite` Java class mirrors this structure (`id`, `name`, `x`, `y`, `currentCostumeId`, `costumes` (List<Map<String, String>>), `sounds` (List<Map<String, String>>)).
     *   The server initializes a default "sprite1" in its `projectSprites` map. Currently, block actions like "Go to X,Y" and "Switch to costume" on the backend operate on this hardcoded "sprite1".
 
+*   **Variable System Data (Conceptual):**
+    *   **Client-Side (`webapp/js/app.js`):**
+        *   `projectGlobalVariables`: Array of global variable objects.
+        *   `sprite.variables`: Array of local variable objects within each sprite in `projectSprites`.
+        *   **Variable Object Structure (JavaScript):**
+            ```javascript
+            {
+                id: String, // Unique ID (e.g., 'var_167...')
+                name: String, // User-defined variable name
+                value: Any,   // Current value of the variable (Number, String, Boolean)
+                isMonitored: Boolean, // True if stage monitor is visible
+                // Scope is implicit: global if in projectGlobalVariables, local if in sprite.variables
+            }
+            ```
+    *   **Server-Side (`SimpleHttpServer.java` & `Sprite.java`):**
+        *   `SimpleHttpServer.projectGlobalVariables`: `Map<String, Object>` for global variables (name -> value).
+        *   `Sprite.localVariables`: `Map<String, Object>` for local variables within each `Sprite` instance (name -> value).
+        *   Note: The `isMonitored` flag is purely a client-side concern for UI display and is not stored or used by the server. The `id` is also primarily for client-side management (e.g., linking checkbox to variable object, key for React-like rendering). Server-side variables are identified by name and scope.
+
+
 ### 3. Execution of Block Types
 
 The `ProgramOrchestrator` (currently part of `ExecuteProgramHandler` in `SimpleHttpServer.java`) uses the `type` field of each block from the input JSON array to determine how to execute it:
@@ -132,10 +152,18 @@ The `ProgramOrchestrator` (currently part of `ExecuteProgramHandler` in `SimpleH
     *   **`SWITCH_COSTUME_BLOCK` (Looks):**
         *   Frontend: Optimistically updates `activeSprite.currentCostumeId` and calls `renderStage()`.
         *   Backend: Extracts `inputs.COSTUME_ID`. Validates if the costume ID exists for the (currently hardcoded) target sprite. If yes, updates the sprite's `currentCostumeId` on the server. Appends a confirmation or error message to aggregated output.
+    *   **`SET_VARIABLE_BLOCK`:**
+        *   **JSON Structure:** `{ type: 'SET_VARIABLE_BLOCK', inputs: { VARIABLE_ID: 'var_id_...', VARIABLE_NAME: 'varName', VARIABLE_SCOPE: 'global'/'local', VALUE: 'someValue' / { reporterType: 'VARIABLE', ... } } }`
+        *   Frontend: Optimistically updates the variable's value in `projectGlobalVariables` or the active sprite's `variables` array. Calls `renderVariablePalette()` and `renderStageMonitors()`.
+        *   Backend: `ExecuteProgramHandler` uses `resolveInputValue` to determine the actual `VALUE` (which could be a literal or resolved from another variable reporter). Updates `projectGlobalVariables` (Map<String, Object>) or the target sprite's `localVariables` map.
+    *   **`CHANGE_VARIABLE_BLOCK`:**
+        *   **JSON Structure:** Similar to `SET_VARIABLE_BLOCK`.
+        *   Frontend: Similar optimistic updates, ensuring numeric conversion for the change operation.
+        *   Backend: `ExecuteProgramHandler` resolves `VALUE`. Retrieves current variable value (defaults to 0 if non-numeric or non-existent), adds the numeric `VALUE`, and updates the map.
     *   This mapping to Java methods or specific logic paths *is* the "compilation to Java" in this context.
 
 *   **Control Flow Blocks (`LOOP_BLOCK` - Placeholder Execution):**
-    *   Extracts `inputs.COUNT`.
+    *   Extracts `inputs.COUNT` (potentially using `resolveInputValue`).
     *   Currently, the backend only acknowledges the loop and its count in the aggregated output (e.g., "Loop X times (execution of children not yet implemented)").
     *   Future: The Java handler for a loop block would need to recursively process its `children` array of blocks. This involves:
         *   Evaluating `inputs.COUNT`.
@@ -171,6 +199,13 @@ A crucial component for making the blocks interact and for the program to have m
         # sprite.setX(sprite.getX() + 10)
         # context.setGlobalVariable('score', 100)
         ```
+    *   **Variable Reporter as Input:** If a block input (e.g., `VALUE` for `SET_VARIABLE_BLOCK`) is a variable reporter, the frontend structures it in the JSON as an object:
+        ```json
+        "inputs": {
+            "VALUE": { "reporterType": "VARIABLE", "id": "var_id_...", "name": "sourceVarName", "scope": "global" }
+        }
+        ```
+        The backend's `ExecuteProgramHandler.resolveInputValue(inputs, "VALUE", ...)` method detects this structure, retrieves the named variable's current value from the appropriate server-side map (`projectGlobalVariables` or a sprite's `localVariables`), and returns it for use by the block's logic.
 
 ### 5. Sandboxing Considerations
 
@@ -278,4 +313,16 @@ The visual stage is rendered on the client-side by the `renderStage()` JavaScrip
     *   The sprite's `(x, y)` coordinates (where (0,0) is stage center, Y positive is up) are converted to CSS `top` and `left` properties.
     *   This conversion accounts for the stage dimensions and the size of the sprite's visual (currently determined by `img.onload` to get image dimensions, or default for placeholder). The CSS positions the *center* of the sprite visual at the calculated `(left, top)` coordinates.
     *   `#stage-area` has `position: relative; overflow: hidden;` to act as the container for absolutely positioned sprites.
-*   **Optimistic Updates:** Functions like `setActiveSprite`, changes to sprite properties via blocks (`GOTO_XY_BLOCK`, `SWITCH_COSTUME_BLOCK` in their client-side logic), and costume selection in the "Costumes" tab trigger `renderStage()` to provide immediate visual feedback.
+*   **Optimistic Updates:** Functions like `setActiveSprite`, changes to sprite properties via blocks (`GOTO_XY_BLOCK`, `SWITCH_COSTUME_BLOCK`, `SET_VARIABLE_BLOCK`, `CHANGE_VARIABLE_BLOCK` in their client-side logic), and costume selection in the "Costumes" tab trigger `renderStage()` and/or `renderStageMonitors()` to provide immediate visual feedback.
+
+### Stage Variable Monitors (Client-Side)
+
+*   **Data Model:** The `isMonitored` boolean flag is added to each variable object in the client-side `projectGlobalVariables` and `sprite.variables` arrays.
+*   **Palette Checkboxes:** In `renderVariablePalette()`, each variable reporter is now created alongside a checkbox. The checkbox's state reflects `isMonitored`. Changing the checkbox updates the variable's `isMonitored` flag and calls `renderStageMonitors()`.
+*   **`renderStageMonitors()` Function:**
+    *   This function clears the `#stage-variable-monitors-container` div.
+    *   It iterates through `projectGlobalVariables` and the active sprite's `variables`.
+    *   For each variable where `isMonitored` is true, it creates a `div.variable-monitor` element.
+    *   The monitor div is styled with CSS and displays the variable's name and current value.
+    *   Monitors are appended to `#stage-variable-monitors-container`.
+*   **Optimistic Value Updates:** When variable values are changed by "Set Variable" or "Change Variable" blocks, the client-side optimistic update logic within the `runProgramButton` listener calls `renderStageMonitors()` after updating the variable's value in the JavaScript model. This ensures that visible stage monitors reflect the new value immediately.

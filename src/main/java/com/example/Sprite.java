@@ -3,7 +3,8 @@ package com.example;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap; // For default costume meta
+import java.util.HashMap; // For localVariables and default costume meta
+// import java.util.concurrent.ConcurrentHashMap; // Decided on HashMap for now
 
 public class Sprite {
     private String id;
@@ -16,6 +17,7 @@ public class Sprite {
     // For now, these lists will hold maps of metadata, like {"id": "unique_id", "name": "costume_name.png"}
     private List<Map<String, String>> costumes;
     private List<Map<String, String>> sounds;
+    private Map<String, Object> localVariables;
     // In a more complete model, 'scripts' would also be here, perhaps as a JSON string or a list of block objects.
 
     public Sprite(String id, String name, double x, double y, String currentCostumeId,
@@ -25,13 +27,15 @@ public class Sprite {
         this.x = x;
         this.y = y;
         this.currentCostumeId = currentCostumeId;
-        this.costumes = costumes != null ? new ArrayList<>(costumes) : new ArrayList<>(); // Use new ArrayList to ensure mutability if input is unmodifiable
-        this.sounds = sounds != null ? new ArrayList<>(sounds) : new ArrayList<>();     // Same here
+        this.costumes = costumes != null ? new ArrayList<>(costumes) : new ArrayList<>();
+        this.sounds = sounds != null ? new ArrayList<>(sounds) : new ArrayList<>();
+        this.localVariables = new HashMap<>(); // Initialize localVariables
     }
 
     // Default constructor for convenience or if created without all initial data
     public Sprite(String id, String name) {
         this(id, name, 0.0, 0.0, null, new ArrayList<>(), new ArrayList<>());
+        // localVariables is initialized by the main constructor call above
     }
 
     // Getters
@@ -69,4 +73,26 @@ public class Sprite {
 
     // In a server-side model, you might have methods here to load actual costume/sound data
     // from a file path stored in the metadata, but for client-side DataURLs, this is mostly for structure.
+
+    // Local Variable Management
+    public Object getLocalVariable(String name) {
+        return this.localVariables.get(name);
+    }
+
+    public void setLocalVariable(String name, Object value) {
+        // Basic type checking or conversion could be added here if needed
+        // e.g., ensuring numbers are stored as Double or Long, not just any Object.
+        // For now, allowing any Object as per typical dynamic language variable behavior.
+        this.localVariables.put(name, value);
+    }
+
+    public Map<String, Object> getAllLocalVariables() {
+        // Return a copy to prevent external modification of the internal map if desired,
+        // though direct modification might be intended in some controlled scenarios.
+        return new HashMap<>(this.localVariables);
+    }
+
+    public void removeLocalVariable(String name) {
+        this.localVariables.remove(name);
+    }
 }
