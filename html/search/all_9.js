@@ -1,0 +1,27 @@
+var searchData=
+[
+  ['id_0',['id',['../classcom_1_1jscratch_1_1ui_1_1_code_workspace_1_1_slot_range.html#a31bb30fd5c282b591a85dce940030f58',1,'com::jscratch::ui::CodeWorkspace::SlotRange']]],
+  ['ifonedgebounce_1',['ifOnEdgeBounce',['../classcom_1_1jscratch_1_1_sprite.html#a1040db88482a992654cc412f20914ca1',1,'com::jscratch::Sprite']]],
+  ['image_2',['image',['../classcom_1_1jscratch_1_1_costume.html#a4eddbfdad8826113aa451c8bf50e0608',1,'com::jscratch::Costume']]],
+  ['importcostume_3',['importCostume',['../classcom_1_1jscratch_1_1ui_1_1_costume_editor_panel.html#a48fbfce4443fe53d2f25cb6ea4df3cef',1,'com::jscratch::ui::CostumeEditorPanel']]],
+  ['importdata_4',['importData',['../classcom_1_1jscratch_1_1ui_1_1_code_workspace_1_1_restricted_transfer_handler.html#aa4841aefc88f58fb2d7d1f39e38fe06a',1,'com::jscratch::ui::CodeWorkspace::RestrictedTransferHandler']]],
+  ['initiative_5',['initiative',['../classcom_1_1burrbox_1_1dndiablo_1_1_dnd_character_stats.html#a9d69068f4d02088a1ed41258bbb2c059',1,'com::burrbox::dndiablo::DndCharacterStats']]],
+  ['instance_6',['instance',['../classgenerated_1_1_scroller2d.html#adbca0da9f204d31ba7b4df1164d60848',1,'generated.Scroller2d.instance'],['../classcom_1_1jscratch_1_1_stage.html#a10882ee2d961243297991d7135419996',1,'com.jscratch.Stage.instance']]],
+  ['intelligencemodifier_7',['intelligenceModifier',['../classcom_1_1burrbox_1_1dndiablo_1_1_dnd_character_stats.html#a2bd4595c2b345fbb4ac73a2d5183efae',1,'com::burrbox::dndiablo::DndCharacterStats']]],
+  ['intelligencescore_8',['intelligenceScore',['../classcom_1_1burrbox_1_1dndiablo_1_1_dnd_character_stats.html#a5200a23410b0d920374a532b5da91be5',1,'com::burrbox::dndiablo::DndCharacterStats']]],
+  ['isactive_9',['isActive',['../classcom_1_1burrbox_1_1dndiablo_1_1_class_feature.html#ab5a13b6d4c9c1f18dd424e729c555daa',1,'com::burrbox::dndiablo::ClassFeature']]],
+  ['isclass_10',['isClass',['../classcom_1_1jscratch_1_1ui_1_1_code_workspace.html#a905b8c28fb6490621dba571770a20aeb',1,'com::jscratch::ui::CodeWorkspace']]],
+  ['isdataflavorsupported_11',['isDataFlavorSupported',['../classcom_1_1jscratch_1_1ui_1_1_code_workspace_1_1_block_transferable.html#aaf232cc803373ed941288e58b423b482',1,'com::jscratch::ui::CodeWorkspace::BlockTransferable']]],
+  ['isdirequalto_12',['isDirEqualTo',['../classgenerated_1_1_b_sprite.html#a623d74049328c649f097f12545657c04',1,'generated::BSprite']]],
+  ['isinstaticcontext_13',['isInStaticContext',['../classcom_1_1jscratch_1_1ui_1_1_code_workspace.html#a01f2b8a4aa2efd63446e593fd0698b37',1,'com::jscratch::ui::CodeWorkspace']]],
+  ['iskeypressed_14',['isKeyPressed',['../classcom_1_1jscratch_1_1_stage.html#a98c94d7f8893d851ef775556535c0574',1,'com.jscratch.Stage.isKeyPressed(String keyName)'],['../classcom_1_1jscratch_1_1_stage.html#af48a0f634a5a4e25ac8f592795907178',1,'com.jscratch.Stage.isKeyPressed(int keyCode)']]],
+  ['ismousedown_15',['isMouseDown',['../classcom_1_1jscratch_1_1_stage.html#a315a506d7fe0f20960924b720be1a3c9',1,'com::jscratch::Stage']]],
+  ['isonlyone_16',['isOnlyOne',['../classcom_1_1jscratch_1_1ui_1_1_code_workspace_1_1_slot_range.html#a94027efcf7e3954dc57c22866d03b1ee',1,'com::jscratch::ui::CodeWorkspace::SlotRange']]],
+  ['isonstage_17',['isOnStage',['../classgenerated_1_1_b_sprite.html#a91b30657b2046a77a2d49e5e0566077e',1,'generated::BSprite']]],
+  ['isspellcaster_18',['isSpellcaster',['../classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#ae77f110f3d57c92e7f568a1d9bd37466',1,'com::burrbox::dndiablo::DNDClass']]],
+  ['istouching_19',['isTouching',['../classcom_1_1jscratch_1_1_sprite.html#a37aafd173b55547fb4048939f796a6c5',1,'com::jscratch::Sprite']]],
+  ['istouchingcolor_20',['isTouchingColor',['../classcom_1_1jscratch_1_1_sprite.html#a975135df35d811c1c136f128e6bcd88b',1,'com::jscratch::Sprite']]],
+  ['isupdatingslots_21',['isUpdatingSlots',['../classcom_1_1jscratch_1_1ui_1_1_code_workspace.html#abc6231166ff47bc3217995d54cfd0bd5',1,'com::jscratch::ui::CodeWorkspace']]],
+  ['isvisible_22',['isVisible',['../classcom_1_1jscratch_1_1_sprite.html#a8ea6bd7077a67adb3362b65968a82052',1,'com::jscratch::Sprite']]],
+  ['itemoflist_23',['itemOfList',['../classcom_1_1jscratch_1_1_scratch_object.html#a7a5895dcb7918660e4aa1dd407488682',1,'com::jscratch::ScratchObject']]]
+];

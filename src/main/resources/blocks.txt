@@ -1,0 +1,344 @@
+# Class : Structure : allowEmpty
+package generated;
+
+import com.jscratch.*;
+import java.awt.Color;
+import java.awt.event.KeyEvent;
+
+public class Sprite${id} extends Sprite {
+    /* slot start [id:"${id}_members" tags:"inClassNotMethod"] */
+    public Sprite${id}() {
+    	super("Sprite${id}");
+    	
+    	// Example: addCostume(new Costume("costume1", "path/to/img.png"));
+
+        /* slot start [id:"${id}_init" tags:"inInstanceMethod"] */
+        /* slot end [id:"${id}_init"] */
+    }
+    /* slot end [id:"${id}_members"] */
+}
+###
+# Method : Structure : inClassNotMethod
+public void myMethod${id}() {
+    /* slot start [id:"${id}_method_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_method_body"] */
+}
+###
+# Method Static : Structure : inClassNotMethod
+public static void myMethod${id}() {
+    /* slot start [id:"${id}_method_body_static" tags:"inStaticMethod"] */
+    
+    /* slot end [id:"${id}_method_body_static"] */
+}
+###
+# Move Steps : Motion : inInstanceMethod
+move(10);
+###
+# Turn Right : Motion : inInstanceMethod
+turnRight(15);
+###
+# Turn Left : Motion : inInstanceMethod
+turnLeft(15);
+###
+# Go To XY : Motion : inInstanceMethod
+goTo(0, 0);
+###
+# Go To Random Position : Motion : inInstanceMethod
+goToRandomPosition();
+###
+# Glide To XY : Motion : inInstanceMethod
+glide(1.0, 0, 0); // seconds, x, y
+###
+# Point In Direction : Motion : inInstanceMethod
+pointInDirection(90);
+###
+# Change X By : Motion : inInstanceMethod
+changeXBy(10);
+###
+# Set X To : Motion : inInstanceMethod
+goTo(0, getY());
+###
+# Change Y By : Motion : inInstanceMethod
+changeYBy(10);
+###
+# Set Y To : Motion : inInstanceMethod
+goTo(getX(), 0);
+###
+# If On Edge, Bounce : Motion : inInstanceMethod
+ifOnEdgeBounce();
+###
+# Set Rotation Style : Motion : inInstanceMethod
+setRotationStyle(RotationStyle.ALL_AROUND);
+###
+# Say For Seconds : Looks : inInstanceMethod
+say("Hello!", 2);
+###
+# Say : Looks : inInstanceMethod
+say("Hello!");
+###
+# Switch Costume : Looks : inInstanceMethod
+switchCostume("costume1");
+###
+# Next Costume : Looks : inInstanceMethod
+nextCostume();
+###
+# Next Backdrop : Looks : inInstanceMethod
+Stage.getInstance().nextBackdrop();
+###
+# Change Size By : Looks : inInstanceMethod
+changeSizeBy(10);
+###
+# Set Size To : Looks : inInstanceMethod
+setSize(100);
+###
+# Set Effect : Looks : inInstanceMethod
+setEffect("ghost", 50);
+###
+# Change Effect By : Looks : inInstanceMethod
+changeEffectBy("ghost", 10);
+###
+# Clear Graphic Effects : Looks : inInstanceMethod
+clearGraphicsEffects();
+###
+# Show : Looks : inInstanceMethod
+show();
+###
+# Hide : Looks : inInstanceMethod
+hide();
+###
+# Play Sound : Sound : inInstanceMethod
+playSound("jscratch_ws/assets/pop.wav");
+###
+# Stop All Sounds : Sound : inInstanceMethod
+stopAllSounds();
+###
+# Set Volume : Sound : inInstanceMethod
+setVolume(100);
+###
+# When Key Pressed : Events : inInstanceMethod
+whenKeyPressed(KeyEvent.VK_SPACE, () -> {
+    /* slot start [id:"${id}_key_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_key_body"] */
+});
+###
+# When This Sprite Clicked : Events : inInstanceMethod
+whenClicked(() -> {
+    /* slot start [id:"${id}_click_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_click_body"] */
+});
+###
+# When I Receive : Events : inInstanceMethod
+whenIReceive("message1", () -> {
+    /* slot start [id:"${id}_msg_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_msg_body"] */
+});
+###
+# Broadcast : Events : inInstanceMethod
+broadcast("message1");
+###
+# Wait Seconds : Control : inInstanceMethod
+wait(1);
+###
+# Repeat Loop : Control : inInstanceMethod
+for (int i = 0; i < 10; i++) {
+    /* slot start [id:"${id}_loop_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_loop_body"] */
+}
+###
+# Forever Loop : Control : inInstanceMethod
+while (true) {
+    /* slot start [id:"${id}_forever_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_forever_body"] */
+    waitTillNextFrame(); 
+}
+###
+# If Then : Control : inInstanceMethod
+if (/* condition */ true) {
+    /* slot start [id:"${id}_if_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_if_body"] */
+}
+###
+# If Then Else : Control : inInstanceMethod
+if (/* condition */ true) {
+    /* slot start [id:"${id}_if_true" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_if_true"] */
+} else {
+    /* slot start [id:"${id}_if_false" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_if_false"] */
+}
+###
+# Wait Until : Control : inInstanceMethod
+while (!(/* condition */ false)) {
+    waitTillNextFrame();
+}
+###
+# Repeat Until : Control : inInstanceMethod
+while (!(/* condition */ false)) {
+    /* slot start [id:"${id}_until_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_until_body"] */
+    waitTillNextFrame();
+}
+###
+# Touching Sprite? : Sensing : inInstanceMethod
+isTouching(otherSprite);
+###
+# Touching Color? : Sensing : inInstanceMethod
+isTouchingColor(Color.RED);
+###
+# Key Pressed? : Sensing : inInstanceMethod
+if (  
+	Stage.getInstance().isKeyPressed("w")
+    ) {
+	 
+}
+###
+# Mouse Down? : Sensing : inInstanceMethod
+Stage.getInstance().isMouseDown();
+###
+# Mouse X : Sensing : inInstanceMethod
+Stage.getInstance().getMouseX();
+###
+# Mouse Y : Sensing : inInstanceMethod
+Stage.getInstance().getMouseY();
+###
+# Timer : Sensing : inInstanceMethod
+Stage.getInstance().getTimer();
+###
+# Reset Timer : Sensing : inInstanceMethod
+Stage.getInstance().resetTimer();
+###
+# Pick Random : Operators : inInstanceMethod
+pickRandom(1, 10);
+###
+# Greater Than : Operators : inInstanceMethod
+(5 > 2)
+###
+# Less Than : Operators : inInstanceMethod
+(5 < 2)
+###
+# Equals : Operators : inInstanceMethod
+(5 == 5)
+###
+# And : Operators : inInstanceMethod
+(true && false)
+###
+# Or : Operators : inInstanceMethod
+(true || false)
+###
+# Not : Operators : inInstanceMethod
+(!true)
+###
+# Join Strings : Operators : inInstanceMethod
+join("hello ", "world");
+###
+# Letter Of : Operators : inInstanceMethod
+letterOf(1, "apple");
+###
+# Length Of : Operators : inInstanceMethod
+lengthOf("apple");
+###
+# Modulo : Operators : inInstanceMethod
+(10 % 3)
+###
+# Round : Operators : inInstanceMethod
+Math.round(3.5)
+###
+# Set Variable : Variables : inInstanceMethod
+setVariable("myVar", 0);
+###
+# Change Variable By : Variables : inInstanceMethod
+changeVariableBy("myVar", 1);
+###
+# Add To List : Variables : inInstanceMethod
+addToList("myList", "item");
+###
+# Delete From List : Variables : inInstanceMethod
+deleteFromList("myList", 1);
+###
+# Item Of List : Variables : inInstanceMethod
+itemOfList("myList", 1);
+###
+# String : Operators : literal
+"text"
+###
+# Number : Operators : literal
+0
+###
+# Method : Structure : inClassNotMethod
+public void myMethod() {
+    /* slot start [id:"${id}method_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}method_body"] */
+}
+###
+# Parameter : Structure : inParameterList
+/* slot start [id:"${id}param" tags:"literal" onlyOne:true] */ /* slot end [id:"${id}param"] */
+###
+# Add Costume : Looks : inInstanceMethod
+
+
+		addCostume(new Costume(
+		
+			"NAME OF YOUR COSTUME",
+			"jscratch_ws/assets/"+
+			"YOURSPRITE.png",
+			32, //change this to be half your sprite width, this is for rotation
+			32 //change this to be half your sprite height, this is for rotation
+		));
+###
+# Add Sprite : Helpers : stage
+
+stage.addSprite(new Sprite1()); // change Sprite1 to the name of your sprite
+
+###
+# Field Static : Helpers : inClassNotMethod
+
+public static Type variableName = new Type();
+
+###
+# Field Instance : Helpers : inClassNotMethod
+
+public Type variableName = new Type();
+
+###
+# Main Class : Helpers : allowEmpty
+
+package generated;
+
+import com.jscratch.*;
+
+public class Main {
+
+	public static void main(String[] args) {
+		Stage stage = Stage.getInstance();
+		stage.addSprite(new Sprite1());
+		/* slot start [id:"${id}method_body" tags:"inInstanceMethod"] */
+    
+    
+		/* slot start [id:"method_body" tags:"stage"] */
+    
+    	/* slot end [id:"method_body"] */
+		/* slot end [id:"${id}method_body"] */
+	}
+	 
+}
+
+###
+# Wait (ms) : Control : inInstanceMethod
+
+try {
+	Thread.sleep(1000);
+} catch (InterruptedException e) {
+	e.printStackTrace();
+}
+###

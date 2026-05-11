@@ -1,0 +1,26 @@
+var classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class =
+[
+    [ "ALL_CLASSES", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a0f3d2cd0abb39cccdd7d19b170334b69", null ],
+    [ "armorProficiencies", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a1e2f29f28d1dc1e2db08ca779285a544", null ],
+    [ "ARTIFICER", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a376b4cf6ba15df81318c1f8a0ace8a93", null ],
+    [ "BARBARIAN", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a0a8188bd3731dcdf4c23dd8317fb20d6", null ],
+    [ "BARD", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a4d2738bab8ac7fde74a3f873619f52b4", null ],
+    [ "className", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a82d3951a75f0d25048931286458f97cd", null ],
+    [ "CLERIC", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a46a8339378fde7d15141e7ad0324dcf2", null ],
+    [ "DRUID", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a54354f8f561b74e40c44615715c01b56", null ],
+    [ "features", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#abde583bfa38dfe889d5bacb7121a7360", null ],
+    [ "FIGHTER", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a4471ef1aca7da0d5a1456c6c4e6534ea", null ],
+    [ "hitDie", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a1a33cb88f84bcecade07c85c43eea089", null ],
+    [ "isSpellcaster", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#ae77f110f3d57c92e7f568a1d9bd37466", null ],
+    [ "MONK", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a6c1d475155d748c94ca30855a890dacb", null ],
+    [ "PALADIN", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a8938acebd23c71cbba9e17e2ec3fa351", null ],
+    [ "primaryAbilities", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a04db7a5a9808cd3c4afecaa714795b3e", null ],
+    [ "RANGER", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a054541928eb4e0ebb67d3ed0f5e94c67", null ],
+    [ "ROGUE", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a165637da7192eba38688c9a75b375a38", null ],
+    [ "savingThrowProficiencies", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a2c75d66418c6fbbf976c747b772e41c3", null ],
+    [ "SORCERER", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a658384866f0b7fba3b30075efe17d4f3", null ],
+    [ "spellcastingAbility", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#ac5fbbcbc3f62ace645f3e235d147f3f0", null ],
+    [ "WARLOCK", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#a9909b248e105f305012300f9d3cf1847", null ],
+    [ "weaponProficiencies", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#ac36b4a641f4a2d2b1b24046d9362ce93", null ],
+    [ "WIZARD", "classcom_1_1burrbox_1_1dndiablo_1_1_d_n_d_class.html#aa648730d1af527e1e48757909e4318e8", null ]
+];

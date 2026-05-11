@@ -1,0 +1,72 @@
+JSCRATCH BLOCKS.TXT SPECIFICATION
+================================
+
+This document describes the syntax and behavior of the 'blocks.txt' resource file used to define drag-and-drop code snippets in JScratch.
+
+1. FILE STRUCTURE
+-----------------
+The file consists of multiple block definitions separated by a triple hash mark (###).
+
+Example:
+# Block Name : Category : tag1, tag2
+public void someCode() {
+    // ...
+}
+###
+
+2. BLOCK HEADER
+---------------
+Each block MUST start with a header line beginning with '# '.
+Format: # [Name] : [Category] : [Tags]
+
+- Name: The display label shown on the block in the UI palette.
+- Category: The tab name where the block will be grouped (e.g., Motion, Looks, Control).
+- Tags (Optional): A comma-separated list of tags that define where this block is allowed to be dropped.
+
+3. CODE BODY
+------------
+The lines following the header (until the next '###') are the literal Java code that will be inserted into the editor when the block is dropped.
+
+4. SLOT DEFINITIONS (IN-CODE SLOTS)
+-----------------------------------
+Slots are designated areas within a block's code (or the base source code) where other blocks can be dropped. They are defined using special Java comments.
+
+Syntax:
+/* slot start [id:"ID" tags:"TAGS" onlyOne:true/false] */
+... current content ...
+/* slot end [id:"ID"] */
+
+Attributes:
+- id: A unique string identifier. The start and end comments MUST have the same ID.
+- tags: A comma-separated list of tags. A block can only be dropped here if it shares at least one tag with this list.
+- onlyOne: If "true", the slot will only accept a drop if the area between the comments is currently empty (or just whitespace).
+
+5. HOW SLOTS WORK (EDITOR LOGIC)
+-------------------------------
+When a block is dragged over the editor, the following rules are applied:
+
+A. Detection: The editor scans for all slot comments. If your mouse is inside a slot, that slot becomes "active" and highlights blue.
+B. Nesting: If you have nested slots (a slot inside another slot), the editor automatically selects the "inner-most" (smallest) slot containing your cursor.
+C. Tag Matching:
+   - If you are NOT in a slot: The block is rejected UNLESS it has the "anywhere" tag.
+   - If you ARE in a slot: The block is accepted ONLY IF one of its tags matches one of the slot's tags.
+D. Formatting:
+   - Multiline Slots: If the start and end tags are on different lines, the block must be dropped on an empty line within the slot.
+   - Inline Slots: If the tags are on the same line (e.g., for parameters), the block is inserted between them.
+
+6. BLOCK VARIABLES (PHP-LIKE)
+------------------------------
+Blocks can use variables that are replaced with actual values when the block is dropped into the editor.
+
+- ${id}: A unique, incrementing integer ID. Each time a block containing this variable is placed, the ID increases. This is useful for generating unique method names, variable names, or IDs for sprites. The counter is stored globally in the project.
+
+7. BUILT-IN SYSTEM TAGS
+-----------------------
+- anywhere: Allows the block to be dropped anywhere in the editor, bypassing slot checks.
+- allowEmpty: Allows the block to be dropped when the editor is completely empty (no template code).
+
+7. CONVENTIONAL TAGS (USED IN THIS PROJECT)
+-------------------------------------------
+- inClassNotMethod: For blocks that belong inside a class body (methods, variables).
+- inInstanceMethod: For blocks that belong inside a method body (statements, loops).
+- literal: For slots that expect a single value or parameter.
