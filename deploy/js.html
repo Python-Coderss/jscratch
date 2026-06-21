@@ -1,0 +1,200 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>CheerpJ Java App Example</title>
+    <script src="https://cjrtnc.leaningtech.com/4.2/loader.js"></script>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 20px;
+      }
+      #file-manager {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background-color: #f9f9f9;
+        max-width: 800px;
+      }
+      #file-list {
+        margin-top: 15px;
+        border-top: 1px solid #eee;
+        padding-top: 10px;
+      }
+      .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+      }
+      .file-item:last-child {
+        border-bottom: none;
+      }
+      button {
+        padding: 6px 12px;
+        cursor: pointer;
+        margin-right: 5px;
+      }
+      .btn-upload { background-color: #4CAF50; color: white; border: none; border-radius: 4px; }
+      .btn-refresh { background-color: #2196F3; color: white; border: none; border-radius: 4px; }
+      .btn-download { background-color: #008CBA; color: white; border: none; border-radius: 4px; }
+      .btn-delete { background-color: #f44336; color: white; border: none; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div id="file-manager">
+      <h3>File Manager (/files/)</h3>
+      <input type="file" id="upload-input" style="display:none">
+      <button class="btn-upload" onclick="document.getElementById('upload-input').click()">Upload to /files/</button>
+      <button class="btn-refresh" onclick="refreshFileList()">Refresh File List</button>
+      <div id="file-list"></div>
+    </div>
+
+    <script>
+      let javaLib;
+
+      (async function () {
+        // Initialize CheerpJ with system clipboard support
+        console.log("Initializing CheerpJ...");
+        await cheerpjInit({ clipboardMode: "system" });
+        cheerpjCreateDisplay(1600, 1000);
+        
+        // Load the JAR as a library to get a handle for interop
+        console.log("Loading library...");
+        javaLib = await cheerpjRunLibrary("/app/jscratch.jar");
+        
+        // Run the JAR
+        console.log("Running JAR...");
+        await cheerpjRunJar("/app/jscratch.jar");
+        
+        console.log("Application started.");
+        refreshFileList();
+      })();
+
+      document.getElementById('upload-input').addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const data = new Uint8Array(e.target.result);
+          const filename = file.name;
+          
+          try {
+            console.log("Uploading " + filename + "...");
+            // 1. Write to /str/ (accessible from JS)
+            cheerpOSAddStringFile("/str/" + filename, data);
+            
+            // 2. Copy from /str/ to /files/ using Java APIs
+            const Files = await javaLib.java.nio.file.Files;
+            const Paths = await javaLib.java.nio.file.Paths;
+            const StandardCopyOption = await javaLib.java.nio.file.StandardCopyOption;
+            
+            const source = await Paths.get("/str/" + filename);
+            const target = await Paths.get("/files/" + filename);
+            
+            // Note: StandardCopyOption is an enum, we need to access its fields
+            const replaceExisting = await StandardCopyOption.REPLACE_EXISTING;
+            
+            await Files.copy(source, target, [replaceExisting]);
+            
+            console.log("File uploaded successfully.");
+            alert("File uploaded to /files/" + filename);
+            refreshFileList();
+          } catch (err) {
+            console.error("Upload failed", err);
+            alert("Upload failed: " + err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+
+      async function refreshFileList() {
+        if (!javaLib) return;
+        const fileListDiv = document.getElementById('file-list');
+        fileListDiv.innerHTML = "<em>Loading file list...</em>";
+        
+        try {
+          const File = await javaLib.java.io.File;
+          const filesDir = await new File("/files/");
+          if (!(await filesDir.exists())) {
+              await filesDir.mkdirs();
+          }
+          
+          // Get the list of filenames as a Java String array
+          const files = await filesDir.list();
+          
+          fileListDiv.innerHTML = "";
+          if (!files) {
+            fileListDiv.innerHTML = "No files in /files/";
+            return;
+          }
+          
+          // Java arrays in CheerpJ 4 have a length property.
+          // We use a traditional for loop because for...of can trigger Symbol-related errors on proxies.
+          const len = await files.length;
+          if (len === 0) {
+            fileListDiv.innerHTML = "No files in /files/";
+            return;
+          }
+          
+          for (let i = 0; i < len; i++) {
+            const f = await files[i];
+            const div = document.createElement('div');
+            div.className = 'file-item';
+            div.innerHTML = `
+              <span>${f}</span>
+              <div>
+                <button class="btn-download" onclick="downloadFile('${f}')">Download</button>
+                <button class="btn-delete" onclick="deleteFile('${f}')">Delete</button>
+              </div>
+            `;
+            fileListDiv.appendChild(div);
+          }
+        } catch (err) {
+          console.error("Failed to list files", err);
+          fileListDiv.innerHTML = "<span style='color:red'>Error listing files. Check console.</span>";
+        }
+      }
+
+      async function downloadFile(filename) {
+        try {
+          console.log("Downloading " + filename + "...");
+          const blob = await cjFileBlob("/files/" + filename);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error("Download failed", err);
+          alert("Download failed: " + err);
+        }
+      }
+
+      async function deleteFile(filename) {
+        if (!confirm("Are you sure you want to delete '" + filename + "' from /files/?")) return;
+        try {
+          const File = await javaLib.java.io.File;
+          const file = await new File("/files/" + filename);
+          const success = await file.delete();
+          if (success) {
+            console.log("File deleted.");
+            refreshFileList();
+          } else {
+            alert("Could not delete file (might be in use).");
+          }
+        } catch (err) {
+          console.error("Delete failed", err);
+          alert("Delete failed: " + err);
+        }
+      }
+    </script>
+  </body>
+</html>
