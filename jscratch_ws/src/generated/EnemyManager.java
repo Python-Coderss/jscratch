@@ -15,7 +15,7 @@ public class EnemyManager {
     private long lastSpawnTime = 0;
     private int spawnInterval = 3000; // 3 seconds
 
-    public static int enemyLimit = 15;
+    public static int enemyLimit = 1;
     public static int enemyCount = 0; 
 
 

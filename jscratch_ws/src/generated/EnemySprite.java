@@ -16,8 +16,8 @@ public class EnemySprite extends BSprite {
     protected int speed = 2;
     protected int attackRange = 40;
     protected int visionRange = 500;
-    double distToPlayer = 2000;
-
+    protected HPBAR hpBar;
+    double distToPlayer = 99999;
     // For Swarm/Positioning
     protected double swarmAngle = 0;
 
@@ -29,10 +29,12 @@ public class EnemySprite extends BSprite {
         }
         // Random swarm angle offset so they don't all stack
         this.swarmAngle = Math.random() * Math.PI * 2;
+        hpBar = new HPBAR();
+
+        
     }
     public void selectState() {
-
-        if (health < 30) {
+                if (health < 30) {
             currentState = AIState.RETREAT;
         } else if (distToPlayer < attackRange) {
             currentState = AIState.ATTACK;
@@ -49,9 +51,13 @@ public class EnemySprite extends BSprite {
         }
 
     }
+    public void hpUpdate() {
+        hpBar.update(health, maxHealth, xx, yy + 90); 
+    }
+    
     public void think(int playerX, int playerY) {
         if (!isVisible()) return;
-
+        hpUpdate();
         distToPlayer = getDistance(xx, yy, playerX, playerY);
 
         // 1. State Selection Logic
@@ -147,6 +153,9 @@ public class EnemySprite extends BSprite {
     public void die() {
         EnemyManager.enemyCount--;
         hide();
+        hpBar.hide();
+        hpBar.empty.hide();
+        hpBar.filled.hide();
         if (minimapSprite != null) minimapSprite.hide();
     }
 }
