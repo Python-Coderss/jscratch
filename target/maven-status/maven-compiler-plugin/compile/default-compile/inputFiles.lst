@@ -1,17 +1,9 @@
-C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\burrbox\dndiablo\ClassFeature.java
-C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\burrbox\dndiablo\DndCharacterAPI.java
-C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\burrbox\dndiablo\DndCharacterStats.java
-C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\burrbox\dndiablo\DNDClass.java
-C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\burrbox\dndiablo\DNDClassFactory.java
-C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\burrbox\dndiablo\DndEntity.java
-C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\burrbox\dndiablo\DnDiablo.java
-C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\burrbox\dndiablo\DnDUtils.java
-C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\burrbox\dndiablo\Player.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\compiler\CompilationResult.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\compiler\CompilerService.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\compiler\JarExporter.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\compiler\ProjectRunner.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\Costume.java
+C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\GameBootstrap.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\Project.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\ProjectManager.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\ScratchEditor.java
@@ -22,6 +14,8 @@ C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\ui\CodeWorkspace.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\ui\CostumeEditorPanel.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\ui\FileManagerPanel.java
+C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\ui\JarExporterGUI.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\ui\MapMakerPanel.java
+C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\ui\ScratchBlockAnnotator.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\utils\ReflectionUtils.java
 C:\Users\raman\eclipse-workspace\A decent rasterizer\jscratch\jscratch\src\main\java\com\jscratch\WorkspaceManager.java

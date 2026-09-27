@@ -7,6 +7,20 @@ import java.io.IOException;
 import java.net.URL;
 import javax.imageio.ImageIO;
 
+/**
+ * Named image + rotation center. Loaded from disk ({@code jscratch.project.root}
+ * aware) or the classpath so exported jars keep resolving.
+ *
+ * <p>Call graph / interactions:
+ * <ul>
+ *   <li>Created directly ({@code new Costume}) or shared via game-layer
+ *       {@code generated.ResourcePool.getCostume} (one image per id).</li>
+ *   <li>Owned by {@code Sprite}; drawn in {@code Sprite.draw},
+ *       hit-tested in {@code Sprite.containsPoint}.</li>
+ *   <li>{@code FloorManager} re-tints the shared tile costumes in place,
+ *       so world + minimap update together.</li>
+ * </ul>
+ */
 public class Costume {
     private String name;
     private BufferedImage image;

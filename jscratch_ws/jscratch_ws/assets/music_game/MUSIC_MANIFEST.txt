@@ -1,0 +1,27 @@
+music_game/ : 22050 Hz mono 16-bit PCM WAV (game-ready, streams via MusicManager)
+total: 266.9 MB
+
+boss_chant_tribal.wav | src[k3pRQCzDizY]=Chant and Tribal Dance - David Shaffer (Grade 2) [k3pRQCzDizY].wav | 6.4 MB | BOSS: Chant & Tribal Dance (sectionable)
+boss_death_odyssey.wav | src[LNNoFHH5UDQ]=Death Odyssey [LNNoFHH5UDQ].wav | 13.8 MB | BOSS: Death Odyssey
+boss_fourth_chorus.wav | src[4EeFykiLu9A]=Fourth Chorus ‐ Hollow Knight Silksong OST Official Soundtrack Original Score [4EeFykiLu9A].wav | 4.1 MB | BOSS/small: Fourth Chorus (small bosses/heavy enemies)
+boss_grimm_troupe.wav | src[Xnc4wSuKvuo]=04 The Grimm Troupe (Hollow Knight： Gods & Nightmares) [Xnc4wSuKvuo].wav | 6.1 MB | BOSS: The Grimm Troupe
+explore_part_falling_combat.wav | src[0vH5_XijZEM]=A Part Falling (Combat) - ULTRAKILL Original Soundtrack [0vH5_XijZEM].wav | 6.6 MB | EXPLORATION: A Part Falling (combat)
+explore_part_falling_calm.wav | src[qOZ0fuJpdu0]=A Part Falling (Calm) - ULTRAKILL Original Soundtrack [qOZ0fuJpdu0].wav | 6.6 MB | EXPLORATION: A Part Falling (calm)
+explore_castle_vein_combat.wav | src[AX9pqyjYZBM]=Castle Vein [AX9pqyjYZBM].wav | 15.0 MB | EXPLORATION: Castle Vein (combat)
+explore_castle_vein_calm.wav | src[TWwpTDMbses]=＂Castle Vein＂ Calm loop extended ｜ ULTRAKILL 1-3 OST [TWwpTDMbses].wav | 21.2 MB | EXPLORATION: Castle Vein (calm)
+explore_in_absentia_combat.wav | src[kv9NwmfhmJg]=In Absentia ΛΟΓΟΣ ~ Combat - ULTRAKILL Soundtrack ｜ Heaven Pierce Her [kv9NwmfhmJg].wav | 11.1 MB | EXPLORATION: In Absentia (combat)
+explore_in_absentia_calm.wav | src[ZQiYIyVqNPg]=In Absentia ΛΟΓΟΣ (Calm loop) [ZQiYIyVqNPg].wav | 5.3 MB | EXPLORATION: In Absentia (calm)
+calm_thousand_greetings.wav | src[gYANvQPPukM]=A Thousand Greetings [gYANvQPPukM].wav | 15.1 MB | CALM: A Thousand Greetings
+calm_dirtmouth.wav | src[NSlkW1fFkyo]=Hollow Knight OST - Dirtmouth [NSlkW1fFkyo].wav | 5.1 MB | CALM: Dirtmouth
+calm_moss_grotto.wav | src[JDsllbOlucw]=Moss Grotto ‐ Hollow Knight Silksong OST Official Soundtrack Original Score [JDsllbOlucw].wav | 7.0 MB | CALM: Moss Grotto
+calm_never_odd_or_even.wav | src[KtfDOac1CVU]=Heaven Pierce Her - Never Odd or Even (ULTRAKILL 8-2 Theme #1) [KtfDOac1CVU].wav | 5.8 MB | CALM: Never Odd or Even (cheerful rest/camp)
+extra_goofy_tenth_level_lockdown.wav | src[XrF2YV4A2W8]=Undertale Yellow OST： 089 - TENTH LEVEL LOCKDOWN [XrF2YV4A2W8].wav | 3.8 MB | EXTRA: TENTH LEVEL LOCKDOWN (goofy fight)
+extra_final_no_return.wav | src[ht-eTQW-p0w]=Undertale Yellow OST： 119 - Some Point of No Return [ht-eTQW-p0w].wav | 3.6 MB | EXTRA: Some Point of No Return (final fight)
+extra_title_medieval.wav | src[J8aw90II1bs]=Heaven Pierce Her - Suffering Leaves Suffering Leaves (ULTRAKILL 7-3 Theme #1) [J8aw90II1bs].wav | 6.1 MB | EXTRA: medieval style (title?)
+extra_rain_falls_calm.wav | src[dAr68YXk8Jk]=The Rain Falls Down, Just The Same ⧸⧸⧸ E-2 Theme Clean Mix [By： @goosegoose_goose] [dAr68YXk8Jk].wav | 4.7 MB | EXTRA: boss lead-up calm
+extra_rain_falls_combat.wav | src[NOPpWSmygfw]=The Rain Falls Down, Just The Same ⧸⧸⧸ E-2 Theme Combat Mix [By： @goosegoose_goose] [NOPpWSmygfw].wav | 5.1 MB | EXTRA: boss lead-up combat
+extra_pest_of_cosmos.wav | src[IOvnrjZFla0]=Terraria Calamity Soundtrack ｜ Pest of the Cosmos (Astrum Deus's Theme) Extended [IOvnrjZFla0].wav | 45.5 MB | EXTRA: Pest of the Cosmos (pre-final boss)
+extra_universal_collapse.wav | src[_YHSiRSsy7s]=Terraria Calamity Soundtrack ｜ Universal Collapse (Final Devourer's Theme) Extended [_YHSiRSsy7s].wav | 46.9 MB | EXTRA: UNIVERSAL COLLAPSE (final/secret boss)
+extra_crystal_peak.wav | src[DWKKsB0rD40]=Hollow Knight OST - Crystal Peak [DWKKsB0rD40].wav | 11.0 MB | EXTRA: Crystal Peak (area music)
+extra_werepig.wav | src[PqqQZ5tDwMk]=Nightmare Werepig - Don't Starve Together OST [PqqQZ5tDwMk].wav | 6.8 MB | EXTRA: Nightmare Werepig (miniboss)
+extra_efs.wav | src[8tozfiKA5Tg]=Don't Stave OST - E.F.S [8tozfiKA5Tg].wav | 4.2 MB | EXTRA: E.F.S (early miniboss)

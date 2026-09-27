@@ -9,6 +9,22 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Engine sprite: position, costumes, scale, effects, and immediate-mode draw.
+ *
+ * <p>Call graph / interactions:
+ * <ul>
+ *   <li>Subclassed by game code: {@code BSprite} (world sprites),
+ *       {@code offsetSprite} (world-anchored UI), {@code FloorSprite},
+ *       {@code MinimapSprite/Tile}, {@code InventoryPanel}, etc.</li>
+ *   <li>Drawn by {@code Stage.paintComponent} once per frame via
+ *       {@link #draw(Graphics2D)}; screenspace = scratch pos + stage/2.</li>
+ *   <li>{@link #switchCostume(String)} is O(1) via a name→index cache —
+ *       {@code Scroller2d.update} switches ~130 tiles per rebuild.</li>
+ *   <li>{@link #handleScaleChange(double, double)} fans out to per-sprite
+ *       listeners ({@code BSprite}/{@code FloorSprite} reposition).</li>
+ * </ul>
+ */
 public class Sprite extends ScratchObject {
     public enum RotationStyle { ALL_AROUND, LEFT_RIGHT, DONT_ROTATE }
 
@@ -16,6 +32,8 @@ public class Sprite extends ScratchObject {
     private double x = 0;
     private double y = 0;
     private double direction = 90;
+    /** Fixed art correction applied at draw time without changing motion direction. */
+    private double costumeRotationOffset = 0;
     private RotationStyle rotationStyle = RotationStyle.ALL_AROUND;
 
     // Looks
@@ -25,6 +43,10 @@ public class Sprite extends ScratchObject {
     private double scaleY = 1.0;
     private List<Costume> costumes = new ArrayList<>();
     private int costumeIndex = 0;
+    // O(1) costume lookup: switchCostume runs per tile per frame (121 minimap
+    // tiles x ~10 costumes). Linear search there was ~1.2k string compares
+    // per Scroller.update().
+    private final java.util.Map<String, Integer> costumeIndexByName = new java.util.HashMap<>();
     
     // Effects
     private double ghostEffect = 0;
@@ -80,9 +102,10 @@ public class Sprite extends ScratchObject {
             tx.translate(screenX, screenY);
             tx.scale((size / 100.0) * scaleX, (size / 100.0) * scaleY);
 
+            double costumeDirection = direction + costumeRotationOffset;
             if (rotationStyle == RotationStyle.ALL_AROUND) {
-                tx.rotate(Math.toRadians(direction - 90));
-            } else if (rotationStyle == RotationStyle.LEFT_RIGHT && (direction < 0 || (direction > 180 && direction < 360))) {
+                tx.rotate(Math.toRadians(costumeDirection - 90));
+            } else if (rotationStyle == RotationStyle.LEFT_RIGHT && (costumeDirection < 0 || (costumeDirection > 180 && costumeDirection < 360))) {
                 tx.scale(-1, 1);
             }
             tx.translate(-c.getRotationCenterX(), -c.getRotationCenterY());
@@ -133,9 +156,10 @@ public class Sprite extends ScratchObject {
         g.translate(screenX, screenY);
         g.scale((size / 100.0) * scaleX, (size / 100.0) * scaleY);
 
+        double costumeDirection = direction + costumeRotationOffset;
         if (rotationStyle == RotationStyle.ALL_AROUND) {
-            g.rotate(Math.toRadians(direction - 90));
-        } else if (rotationStyle == RotationStyle.LEFT_RIGHT && (direction < 0 || (direction > 180 && direction < 360))) {
+            g.rotate(Math.toRadians(costumeDirection - 90));
+        } else if (rotationStyle == RotationStyle.LEFT_RIGHT && (costumeDirection < 0 || (costumeDirection > 180 && costumeDirection < 360))) {
             g.scale(-1, 1);
         }
 
@@ -219,12 +243,15 @@ public class Sprite extends ScratchObject {
     public void say(String text, double sec) { say(text); wait(sec); say(""); }
 
     public void switchCostume(String n) { 
-    	
+    	Integer idx = costumeIndexByName.get(n);
+    	if (idx != null) {
+    		costumeIndex = idx;
+    		return;
+    	}
     	for(int i=0; i<costumes.size(); i++) {
     		if(costumes.get(i).getName().equals(n)) {
-
-    			costumeIndex = i; 
-    			
+    			costumeIndex = i;
+    			costumeIndexByName.put(n, i);
     			return;
     		} 
     	}
@@ -237,7 +264,16 @@ public class Sprite extends ScratchObject {
     public void show() { visible = true; }
     public void hide() { visible = false; }
     public boolean isVisible() { return visible; }
-    public void addCostume(Costume c) { costumes.add(c); }
+    public void addCostume(Costume c) {
+        costumeIndexByName.put(c.getName(), costumes.size());
+        costumes.add(c);
+    }
+    /** Clears costumes + lookup cache (replaces reflection hacks in subclasses). */
+    public void clearCostumes() {
+        costumes.clear();
+        costumeIndexByName.clear();
+        costumeIndex = 0;
+    }
 
     public boolean isTouching(Sprite o) { return getBounds().intersects(o.getBounds()); }
     public boolean isTouchingColor(Color c) {
@@ -250,6 +286,9 @@ public class Sprite extends ScratchObject {
 
     private void normalize() { while(direction > 180) direction -= 360; while(direction <= -180) direction += 360; }
     public void setRotationStyle(RotationStyle s) { rotationStyle = s; }
+
+    /** Rotate the costume art while keeping the Scratch direction used by movement and AI unchanged. */
+    public void setCostumeRotationOffset(double degrees) { costumeRotationOffset = degrees; }
     
     @Override
     public Object getVariable(String name) {

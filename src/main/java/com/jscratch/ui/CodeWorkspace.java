@@ -30,10 +30,13 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +48,11 @@ import java.util.Set;
 public class CodeWorkspace extends JPanel {
     private RSyntaxTextArea codeEditor;
     private JTabbedPane paletteTabs;
+    private JTabbedPane sourceViews;
+    private RSyntaxTextArea readableJavaEditor;
+    private JPanel blockCanvas;
+    private JScrollPane blockScrollPane;
+    private Timer blockRefreshTimer;
     private Project project;
     private SpriteData currentSprite;
     private AutoCompletion autoCompletion;
@@ -83,6 +91,8 @@ public class CodeWorkspace extends JPanel {
     private Runnable onAutoCompile;
     private CustomParser errorParser;
     private String lastCompiledText = "";
+    /** Suppress block-pane rerenders while block inputs write back into the Java document. */
+    private boolean writingBlockParameter;
 
     public static final DataFlavor BLOCK_FLAVOR = new DataFlavor(BlockSnippet.class, "BlockSnippet");
 
@@ -90,6 +100,7 @@ public class CodeWorkspace extends JPanel {
         public String name;
         public String category;
         public String code;
+        public String docs = "";
         public List<String> tags = new ArrayList<>();
     }
 
@@ -176,10 +187,12 @@ public class CodeWorkspace extends JPanel {
         }
 
         codeEditor.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) { scheduleSlotRefresh(); triggerAutoCompile(); }
-            public void removeUpdate(DocumentEvent e) { scheduleSlotRefresh(); triggerAutoCompile(); }
-            public void changedUpdate(DocumentEvent e) { scheduleSlotRefresh(); triggerAutoCompile(); }
+            public void insertUpdate(DocumentEvent e) { refreshReadableJavaView(); scheduleSlotRefresh(); if (!writingBlockParameter) scheduleBlockRefresh(); triggerAutoCompile(); }
+            public void removeUpdate(DocumentEvent e) { refreshReadableJavaView(); scheduleSlotRefresh(); if (!writingBlockParameter) scheduleBlockRefresh(); triggerAutoCompile(); }
+            public void changedUpdate(DocumentEvent e) { refreshReadableJavaView(); scheduleSlotRefresh(); if (!writingBlockParameter) scheduleBlockRefresh(); triggerAutoCompile(); }
         });
+        blockRefreshTimer = new Timer(250, e -> rebuildBlockCanvas());
+        blockRefreshTimer.setRepeats(false);
 
         MouseAdapter hoverAdapter = new MouseAdapter() {
             @Override public void mouseMoved(MouseEvent e) { updateHoverHighlight(e.getPoint()); }
@@ -201,12 +214,412 @@ public class CodeWorkspace extends JPanel {
         paletteTabs.setPreferredSize(new Dimension(250, 0));
         loadLiteralBlocks();
 
-        // 3. Layout with SplitPane
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, paletteTabs, new RTextScrollPane(codeEditor));
+        // Keep one source document and expose two synchronized views of it.
+        // Java is the editable source; Blocks renders annotations and writes
+        // edited parameter slots straight back into this same document.
+        sourceViews = new JTabbedPane();
+        readableJavaEditor = new RSyntaxTextArea(20, 60);
+        readableJavaEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVA);
+        readableJavaEditor.setCodeFoldingEnabled(true);
+        readableJavaEditor.setAntiAliasingEnabled(true);
+        readableJavaEditor.setTabSize(4);
+        readableJavaEditor.setTabsEmulated(true);
+        readableJavaEditor.setEditable(false);
+        readableJavaEditor.setFocusable(true);
+        readableJavaEditor.setLineWrap(false);
+        readableJavaEditor.setToolTipText("Java source with JScratch-only block and slot markers hidden.");
+        try {
+            Theme theme = Theme.load(getClass().getResourceAsStream("/org/fife/ui/rsyntaxtextarea/themes/eclipse.xml"));
+            theme.apply(readableJavaEditor);
+        } catch (Exception ignored) { }
+        sourceViews.addTab("Java (readable)", new RTextScrollPane(readableJavaEditor));
+        sourceViews.addTab("Java Source (editable)", new RTextScrollPane(codeEditor));
+        blockCanvas = new JPanel();
+        blockCanvas.setLayout(new BoxLayout(blockCanvas, BoxLayout.Y_AXIS));
+        blockCanvas.setBackground(new Color(242, 246, 252));
+        blockCanvas.setBorder(BorderFactory.createEmptyBorder(16, 18, 18, 18));
+        blockScrollPane = new JScrollPane(blockCanvas);
+        blockScrollPane.getVerticalScrollBar().setUnitIncrement(18);
+        ToolTipManager.sharedInstance().registerComponent(blockCanvas);
+        sourceViews.addTab("Blocks", blockScrollPane);
+        sourceViews.addChangeListener(e -> { if (sourceViews.getSelectedIndex() == 2) rebuildBlockCanvas(); });
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, paletteTabs, sourceViews);
         splitPane.setDividerLocation(250);
         add(splitPane, BorderLayout.CENTER);
     }
     
+    private void refreshReadableJavaView() {
+        if (readableJavaEditor == null || codeEditor == null) return;
+        String readable = ScratchBlockAnnotator.readableJava(codeEditor.getText());
+        if (!readable.equals(readableJavaEditor.getText())) {
+            int caret = readableJavaEditor.getCaretPosition();
+            readableJavaEditor.setText(readable);
+            readableJavaEditor.setCaretPosition(Math.min(caret, readable.length()));
+        }
+    }
+
+    private void scheduleBlockRefresh() {
+        if (blockRefreshTimer != null) blockRefreshTimer.restart();
+    }
+
+    /** Rebuild visible Scratch blocks from comment annotations in the source. */
+    private void rebuildBlockCanvas() {
+        if (blockCanvas == null || codeEditor == null) return;
+        String source = codeEditor.getText();
+        List<RenderedBlock> blocks = findRenderedBlocks(source);
+        blockCanvas.removeAll();
+        JPanel header = new JPanel(new BorderLayout(10, 2));
+        header.setOpaque(false);
+        header.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JLabel sourceIdentity = new JLabel(currentSprite == null ? "Blocks" : currentSprite.getQualifiedName());
+        sourceIdentity.setFont(new Font("SansSerif", Font.BOLD, 17));
+        sourceIdentity.setForeground(new Color(36, 52, 76));
+        header.add(sourceIdentity, BorderLayout.WEST);
+        JLabel count = new JLabel(blocks.size() + (blocks.size() == 1 ? " block" : " blocks"));
+        count.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        count.setForeground(new Color(90, 107, 130));
+        header.add(count, BorderLayout.EAST);
+        header.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+        blockCanvas.add(header);
+        JSeparator divider = new JSeparator();
+        divider.setAlignmentX(Component.LEFT_ALIGNMENT);
+        blockCanvas.add(divider);
+        blockCanvas.add(Box.createVerticalStrut(14));
+        if (blocks.isEmpty()) {
+            JLabel empty = new JLabel("No Scratch blocks found. Add a /* block start [...] */ annotation to Java statements.");
+            empty.setForeground(new Color(95, 105, 120));
+            empty.setAlignmentX(Component.LEFT_ALIGNMENT);
+            blockCanvas.add(empty);
+        } else {
+            for (RenderedBlock block : blocks) {
+                // Start markers for containing control blocks are rendered as
+                // normal blocks too; only top-level stacks are emitted here.
+                if (block.parent != null) continue;
+                JPanel stack = createBlockStack(block, source);
+                stack.setAlignmentX(Component.LEFT_ALIGNMENT);
+                stack.setBorder(BorderFactory.createEmptyBorder(0, 0, 14, 0));
+                blockCanvas.add(stack);
+            }
+        }
+        blockCanvas.add(Box.createVerticalGlue());
+        blockCanvas.revalidate();
+        blockCanvas.repaint();
+    }
+
+    /** Recursively render a control body as indented child blocks. */
+    private JPanel createBlockStack(RenderedBlock parent, String source) {
+        JPanel stack = new JPanel();
+        stack.setOpaque(false);
+        stack.setLayout(new BoxLayout(stack, BoxLayout.Y_AXIS));
+        stack.add(createRenderedBlock(parent, source));
+        for (RenderedBlock child : parent.children) {
+            JPanel row = new JPanel(new BorderLayout());
+            row.setOpaque(false);
+            row.setAlignmentX(Component.LEFT_ALIGNMENT);
+            row.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createEmptyBorder(4, 18, 0, 0),
+                    BorderFactory.createMatteBorder(0, 2, 0, 0, new Color(196, 210, 229))));
+            row.add(createBlockStack(child, source), BorderLayout.CENTER);
+            stack.add(row);
+        }
+        return stack;
+    }
+
+    /** Parsed view model for a single annotated Java statement. */
+    private static class RenderedBlock {
+        String id, category, label, shape, docs, comment;
+        int start, bodyStart, bodyEnd, end;
+        RenderedBlock parent;
+        List<RenderedBlock> children = new ArrayList<>();
+        List<RenderedParameter> parameters = new ArrayList<>();
+    }
+
+    /** Source offsets around one editable literal/value. */
+    private static class RenderedParameter {
+        String id, type, value;
+        int valueStart, valueEnd;
+    }
+
+    private List<RenderedBlock> findRenderedBlocks(String source) {
+        List<RenderedBlock> result = new ArrayList<>();
+        Pattern startPattern = Pattern.compile("/\\* block start \\[([^]]*)\\] \\*/");
+        Matcher starts = startPattern.matcher(source);
+        while (starts.find()) {
+            String attrs = starts.group(1);
+            String id = annotationValue(attrs, "id");
+            if (id == null) continue;
+            Pattern endPattern = Pattern.compile("/\\* block end \\[id:\"" + Pattern.quote(id) + "\"\\] \\*/");
+            Matcher ends = endPattern.matcher(source);
+            if (!ends.find(starts.end())) continue;
+            RenderedBlock block = new RenderedBlock();
+            block.id = id; block.category = valueOr(annotationValue(attrs, "category"), "My Blocks");
+            block.label = valueOr(annotationValue(attrs, "label"), id);
+            block.shape = valueOr(annotationValue(attrs, "shape"), "command");
+            block.docs = valueOr(annotationValue(attrs, "docs"), "Java statement block");
+            block.start = starts.start(); block.bodyStart = starts.end();
+            block.bodyEnd = ends.start(); block.end = ends.end();
+            String commentPrefix = "/* block comment [block:\"" + id + "\"";
+            int commentStart = source.lastIndexOf(commentPrefix, starts.start());
+            if (commentStart >= 0) {
+                int commentEnd = source.indexOf("*/", commentStart);
+                if (commentEnd >= 0 && commentEnd < starts.start()) {
+                    String commentAttributes = source.substring(commentStart + commentPrefix.length(), commentEnd);
+                    block.comment = annotationValue(commentAttributes, "text");
+                }
+            }
+            if (block.comment == null) block.comment = block.docs;
+            result.add(block);
+        }
+        Collections.sort(result, (a, b) -> Integer.compare(a.start, b.start));
+        for (RenderedBlock child : result) {
+            RenderedBlock best = null;
+            for (RenderedBlock candidate : result) {
+                if (candidate == child || candidate.start > child.start || candidate.end < child.end) continue;
+                if (best == null || candidate.end - candidate.start < best.end - best.start) best = candidate;
+            }
+            child.parent = best;
+            if (best != null) best.children.add(child);
+        }
+
+        Pattern paramStart = Pattern.compile("/\\* param start \\[([^]]*)\\] \\*/");
+        Matcher params = paramStart.matcher(source);
+        List<RenderedParameter> allParams = new ArrayList<>();
+        while (params.find()) {
+            String attrs = params.group(1), id = annotationValue(attrs, "id");
+            if (id == null) continue;
+            Pattern paramEnd = Pattern.compile("/\\* param end \\[id:\"" + Pattern.quote(id) + "\"\\] \\*/");
+            Matcher end = paramEnd.matcher(source);
+            if (!end.find(params.end())) continue;
+            RenderedParameter param = new RenderedParameter();
+            param.id = id; param.type = valueOr(annotationValue(attrs, "type"), "value");
+            param.valueStart = params.end(); param.valueEnd = end.start();
+            param.value = source.substring(param.valueStart, param.valueEnd).trim();
+            allParams.add(param);
+        }
+        for (RenderedParameter param : allParams) {
+            RenderedBlock owner = null;
+            for (RenderedBlock candidate : result) {
+                if (param.valueStart < candidate.bodyStart || param.valueEnd > candidate.bodyEnd) continue;
+                if (owner == null || candidate.end - candidate.start < owner.end - owner.start) owner = candidate;
+            }
+            if (owner != null) owner.parameters.add(param);
+        }
+        return result;
+    }
+
+    private static String annotationValue(String attrs, String key) {
+        String prefix = key + ":\"";
+        int start = attrs.indexOf(prefix);
+        if (start < 0) return null;
+        start += prefix.length();
+        StringBuilder value = new StringBuilder();
+        boolean escaped = false;
+        for (int i = start; i < attrs.length(); i++) {
+            char ch = attrs.charAt(i);
+            if (escaped) { value.append(ch); escaped = false; }
+            else if (ch == 92) escaped = true;
+            else if (ch == 34) return value.toString();
+            else value.append(ch);
+        }
+        return null;
+    }
+
+    private static String valueOr(String value, String fallback) {
+        return value == null || value.length() == 0 ? fallback : value;
+    }
+
+    /** Draw one block and its attached, pinned documentation comment. */
+    private JComponent createRenderedBlock(RenderedBlock block, String source) {
+        JPanel card = new JPanel(new BorderLayout(0, 0));
+        card.setOpaque(true);
+        boolean reporter = "reporter".equals(block.shape) || "boolean".equals(block.shape);
+        Color accent = getCategoryColor(block.category);
+        card.setBackground(reporter ? new Color(255, 255, 255) : new Color(255, 255, 255));
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 5, 1, 1, accent),
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(new Color(216, 224, 235)),
+                        BorderFactory.createEmptyBorder(8, 11, 8, 11))));
+
+        card.setMaximumSize(new Dimension(760, Integer.MAX_VALUE));
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.setToolTipText("<html><b>" + html(block.label) + "</b><br>" + html(block.docs) + "</html>");
+        if ("control".equals(block.shape)) card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 5, 1, 1, accent.darker()),
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(new Color(198, 211, 229)),
+                        BorderFactory.createEmptyBorder(8, 11, 8, 11))));
+        JPanel titleRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        titleRow.setOpaque(false);
+        JLabel label = new JLabel(block.label);
+        label.setForeground(new Color(37, 51, 72));
+        label.setFont(new Font("SansSerif", Font.BOLD, 13));
+        titleRow.add(label);
+        JLabel category = new JLabel(block.category);
+        category.setOpaque(true);
+        category.setBackground(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 35));
+        category.setForeground(accent.darker());
+        category.setBorder(BorderFactory.createEmptyBorder(2, 7, 2, 7));
+        category.setFont(new Font("SansSerif", Font.BOLD, 10));
+        titleRow.add(category);
+        card.add(titleRow, BorderLayout.NORTH);
+
+        JPanel details = new JPanel();
+        details.setOpaque(false);
+        details.setLayout(new BoxLayout(details, BoxLayout.Y_AXIS));
+        JLabel sourceInfo = new JLabel(block.shape + "  |  lines " + lineNumber(source, block.start)
+                + "-" + lineNumber(source, block.end) + "  |  " + block.id);
+        sourceInfo.setForeground(new Color(103, 116, 135));
+        sourceInfo.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        sourceInfo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        details.add(sourceInfo);
+
+        if (!block.parameters.isEmpty()) {
+            JLabel inputsTitle = new JLabel("Parameters");
+            inputsTitle.setForeground(new Color(75, 89, 108));
+            inputsTitle.setFont(new Font("SansSerif", Font.BOLD, 11));
+            inputsTitle.setBorder(BorderFactory.createEmptyBorder(7, 0, 1, 0));
+            inputsTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+            details.add(inputsTitle);
+            JPanel inputs = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 4));
+            inputs.setOpaque(false);
+            int inputNumber = 1;
+            for (RenderedParameter parameter : block.parameters) {
+                JTextField field = new JTextField(displayParameter(parameter), parameter.type.equals("text") ? 12 : 7);
+                String ownerDoc = valueOr(block.comment, block.docs);
+                field.setToolTipText("<html>" + html(ownerDoc) + "<br>Editable " + html(parameter.type)
+                        + " input (" + html(parameter.id) + ").</html>");
+                field.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(195, 207, 223)), BorderFactory.createEmptyBorder(4, 7, 4, 7)));
+                field.setBackground(Color.WHITE);
+                field.addActionListener(e -> writeParameter(parameter, field.getText()));
+                field.addFocusListener(new FocusAdapter() {
+                    @Override public void focusLost(FocusEvent e) { writeParameter(parameter, field.getText()); }
+                });
+                inputs.add(new JLabel("#" + inputNumber++ + " | " + parameter.type + ":"));
+                inputs.add(field);
+            }
+            inputs.setAlignmentX(Component.LEFT_ALIGNMENT);
+            details.add(inputs);
+        }
+
+        final String javaCode = reconstructableJava(block, source);
+        JPanel javaHeader = new JPanel(new BorderLayout());
+        javaHeader.setOpaque(false);
+        javaHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+        javaHeader.setBorder(BorderFactory.createEmptyBorder(7, 0, 3, 0));
+        JLabel javaTitle = new JLabel("Java source (editor annotations removed)");
+        javaTitle.setForeground(new Color(75, 89, 108));
+        javaTitle.setFont(new Font("SansSerif", Font.BOLD, 11));
+        javaHeader.add(javaTitle, BorderLayout.WEST);
+        JButton copySource = new JButton("Copy");
+        copySource.setFocusable(false);
+        copySource.setMargin(new Insets(2, 8, 2, 8));
+        copySource.setToolTipText("Copy this block as Java source without editor annotations");
+        copySource.addActionListener(e -> Toolkit.getDefaultToolkit().getSystemClipboard()
+                .setContents(new StringSelection(javaCode), null));
+        javaHeader.add(copySource, BorderLayout.EAST);
+        details.add(javaHeader);
+        JTextArea javaSource = new JTextArea(javaCode);
+        javaSource.setToolTipText("Java source for this block with JScratch-only markers removed.");
+        javaSource.setEditable(false);
+        javaSource.setFocusable(true);
+        javaSource.setLineWrap(true);
+        javaSource.setWrapStyleWord(false);
+        javaSource.setColumns(60);
+        javaSource.setRows(Math.max(1, Math.min(6, javaCode.split("\\n", -1).length)));
+        javaSource.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        javaSource.setForeground(new Color(44, 57, 76));
+        javaSource.setBackground(new Color(247, 249, 252));
+        javaSource.setBorder(BorderFactory.createEmptyBorder(5, 7, 5, 7));
+        javaSource.setCaretPosition(0);
+        JScrollPane sourceScroll = new JScrollPane(javaSource);
+        sourceScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sourceScroll.setPreferredSize(new Dimension(580, Math.min(124, Math.max(48, javaSource.getPreferredSize().height + 4))));
+        sourceScroll.setBorder(BorderFactory.createLineBorder(new Color(220, 227, 237)));
+        details.add(sourceScroll);
+        card.add(details, BorderLayout.CENTER);
+
+        JPanel note = new JPanel(new BorderLayout(5, 0));
+
+        note.setBackground(new Color(255, 255, 255));
+        note.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 3, 0, 0, new Color(226, 190, 93)),
+                BorderFactory.createEmptyBorder(4, 9, 5, 8)));
+        JLabel pin = new JLabel("NOTE");
+        pin.setForeground(new Color(145, 112, 38));
+        pin.setFont(new Font("SansSerif", Font.BOLD, 9));
+        JLabel noteText = new JLabel("<html>" + html(valueOr(block.comment, block.docs)) + "</html>");
+        noteText.setForeground(new Color(80, 91, 108));
+        noteText.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        note.add(pin, BorderLayout.WEST); note.add(noteText, BorderLayout.CENTER);
+        note.setToolTipText("Pinned block note — its text is stored in this block's source annotation.");
+        card.setName("scratch-block-" + block.id);
+        note.setName("scratch-comment-" + block.id);
+        JPanel stack = new JPanel(); stack.setOpaque(false); stack.setLayout(new BoxLayout(stack, BoxLayout.Y_AXIS));
+        stack.add(card); stack.add(note);
+        return stack;
+    }
+
+    /** Remove editor-only annotations while retaining Java strings and comments. */
+    private String reconstructableJava(RenderedBlock block, String source) {
+        return ScratchBlockAnnotator.readableJava(source.substring(block.bodyStart, block.bodyEnd));
+    }
+
+    private int lineNumber(String source, int offset) {
+        int line = 1;
+        for (int i = 0; i < offset && i < source.length(); i++) {
+            if (source.charAt(i) == '\n') line++;
+        }
+        return line;
+    }
+
+    private String displayParameter(RenderedParameter parameter) {
+        String value = parameter.value;
+        if (parameter.type.equals("text") || parameter.type.equals("string")) {
+            if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) return value.substring(1, value.length() - 1).replace("\\\"", "\"");
+        }
+        if (parameter.type.equals("character") && value.length() >= 3 && value.startsWith("'") && value.endsWith("'")) {
+            return value.substring(1, value.length() - 1).replace("\\\\'", "'");
+        }
+        return value;
+    }
+
+    /** Update only the literal between its markers, retaining all annotations. */
+    private void writeParameter(RenderedParameter parameter, String value) {
+        String current = codeEditor.getText();
+        // Re-find this parameter by id: edits to an earlier field shift every later source offset.
+        String startMarker = "/* param start [id:\"" + parameter.id + "\"";
+        int markerOffset = current.indexOf(startMarker);
+        if (markerOffset < 0) return;
+        int valueStart = current.indexOf("*/", markerOffset);
+        if (valueStart < 0) return;
+        valueStart += 2;
+        String endMarker = "/* param end [id:\"" + parameter.id + "\"] */";
+        int valueEnd = current.indexOf(endMarker, valueStart);
+        if (valueEnd < 0) return;
+        String replacement = value;
+        if (parameter.type.equals("text") || parameter.type.equals("string")) {
+            replacement = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        } else if (parameter.type.equals("character")) {
+            replacement = "'" + value.replace("'", "\\'") + "'";
+        }
+        if (replacement.equals(current.substring(valueStart, valueEnd))) return;
+        try {
+            writingBlockParameter = true;
+            codeEditor.getDocument().remove(valueStart, valueEnd - valueStart);
+            codeEditor.getDocument().insertString(valueStart, replacement, null);
+            lastCompiledText = codeEditor.getText();
+            if (currentSprite != null) currentSprite.sourceCode = lastCompiledText;
+            if (blockCanvas != null) scheduleBlockRefresh();
+        } catch (BadLocationException ignored) { }
+        finally { writingBlockParameter = false; }
+    }
+
+    private static String html(String text) {
+        return text == null ? "" : text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
     private void triggerAutoCompile() {
         if (codeEditor.getText().equals(lastCompiledText)) return;
         autoCompileTimer.restart();
@@ -229,8 +642,8 @@ public class CodeWorkspace extends JPanel {
             DefaultParseResult result = new DefaultParseResult(this);
             if (currentSprite == null) return result;
             
-            for (CompilationResult.CompilationError error : errors) {
-                if (error.fileName.equals(currentSprite.name + ".java")) {
+            for (CompilationResult.CompilationError error : errors) {                    if (error.fileName.equals(currentSprite.name + ".java")
+                            || error.fileName.equals(currentSprite.getQualifiedName().replace('.', '/') + ".java")) {
                     try {
                         int line = error.line - 1;
                         if (line >= 0 && line < doc.getDefaultRootElement().getElementCount()) {
@@ -301,10 +714,11 @@ public class CodeWorkspace extends JPanel {
                     String[] parts = meta.split(" : ");
                     currentBlock = new BlockSnippet();
                     currentBlock.name = parts[0].trim();
-                    currentBlock.category = parts[1].trim();
+                    currentBlock.category = parts.length > 1 ? parts[1].trim() : "My Blocks";
                     if (parts.length > 2) {
                         for (String t : parts[2].split(",")) currentBlock.tags.add(t.trim());
                     }
+                    if (parts.length > 3) currentBlock.docs = parts[3].replaceFirst("^docs=", "").trim();
                     codeBuffer.setLength(0);
                 } else if (line.equals("###")) {
                     if (currentBlock != null) {
@@ -331,24 +745,79 @@ public class CodeWorkspace extends JPanel {
     }
 
     private JComponent createBlockUI(final BlockSnippet block) {
+        // Block templates can declare editable palette inputs with
+        // ${param:name:type:default}; those values are substituted on drag.
+        final String template = block.code;
+        final Map<String, PaletteParameter> parameters = parsePaletteParameters(template);
+        final JPanel card = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 4));
+        card.setOpaque(true);            card.setBackground(getCategoryColor(block.category));
+
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(getCategoryColor(block.category).darker()),
+                BorderFactory.createEmptyBorder(5, 7, 5, 7)));
+        card.setMaximumSize(new Dimension(228, 100));
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        card.setToolTipText("<html><b>" + html(block.name) + "</b><br>" + html(valueOr(block.docs, "Scratch-style code block.")) + "</html>");
         JLabel label = new JLabel(block.name);
-        label.setOpaque(true);
-        label.setBackground(getCategoryColor(block.category));
         label.setForeground(Color.WHITE);
         label.setFont(new Font("Arial", Font.BOLD, 12));
-        label.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
-        label.setMaximumSize(new Dimension(220, 40));
-        label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        label.setTransferHandler(new TransferHandler() {
+        card.add(label);
+        for (PaletteParameter parameter : parameters.values()) {
+            JTextField input = new JTextField(parameter.value, parameter.type.equals("text") ? 8 : 5);
+            input.setToolTipText("Block input: " + parameter.name + " (" + parameter.type + ")");
+            input.addActionListener(e -> parameter.value = input.getText());
+            input.addFocusListener(new FocusAdapter() {
+                @Override public void focusLost(FocusEvent e) { parameter.value = input.getText(); }
+            });
+            card.add(new JLabel(parameter.name + ":"));
+            card.add(input);
+        }
+        card.setTransferHandler(new TransferHandler() {
             @Override public int getSourceActions(JComponent c) { return COPY; }
-            @Override protected Transferable createTransferable(JComponent c) { return new BlockTransferable(block); }
-        });
-        label.addMouseListener(new MouseAdapter() {
-            @Override public void mousePressed(MouseEvent e) {
-                ((JComponent)e.getSource()).getTransferHandler().exportAsDrag((JComponent)e.getSource(), e, TransferHandler.COPY);
+            @Override protected Transferable createTransferable(JComponent c) {
+                BlockSnippet configured = new BlockSnippet();
+                configured.name = block.name; configured.category = block.category;
+                configured.tags = block.tags; configured.docs = block.docs;
+                configured.code = resolvePaletteParameters(template, parameters);
+                if (configured.code.contains("${id}")) configured.code = configured.code.replace("${id}", String.valueOf(project.blockIdCounter++));
+                return new BlockTransferable(configured);
             }
         });
-        return label;
+        card.addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) {
+                card.getTransferHandler().exportAsDrag(card, e, TransferHandler.COPY);
+            }
+        });
+        return card;
+    }
+
+    private static class PaletteParameter {
+        String name, type, value;
+        PaletteParameter(String name, String type, String value) { this.name = name; this.type = type; this.value = value; }
+    }
+
+    private Map<String, PaletteParameter> parsePaletteParameters(String template) {
+        Map<String, PaletteParameter> parameters = new java.util.LinkedHashMap<>();
+        Matcher matcher = Pattern.compile("\\$\\{param:([^:}]+):([^:}]+):([^}]+)}").matcher(template);
+        while (matcher.find()) {
+            String name = matcher.group(1).trim();
+            parameters.put(name, new PaletteParameter(name, matcher.group(2).trim(), matcher.group(3).trim()));
+        }
+        return parameters;
+    }
+
+    private String resolvePaletteParameters(String template, Map<String, PaletteParameter> parameters) {
+        Matcher matcher = Pattern.compile("\\$\\{param:([^:}]+):([^:}]+):([^}]+)}").matcher(template);
+        StringBuffer resolved = new StringBuffer();
+        while (matcher.find()) {
+            PaletteParameter parameter = parameters.get(matcher.group(1).trim());
+            String value = parameter == null ? matcher.group(3) : parameter.value;
+            if (parameter != null && "text".equals(parameter.type)) value = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+            matcher.appendReplacement(resolved, Matcher.quoteReplacement(value));
+        }
+        matcher.appendTail(resolved);
+        return resolved.toString();
     }
 
     private Color getCategoryColor(String category) {
@@ -529,11 +998,21 @@ public class CodeWorkspace extends JPanel {
     public void loadSpriteCode(SpriteData sprite) {
         if (currentSprite != null) saveCurrentCode();
         this.currentSprite = sprite;
+        String migrated = ScratchBlockAnnotator.annotate(sprite.sourceCode, sprite.name);
+        if (!migrated.equals(sprite.sourceCode)) sprite.sourceCode = migrated;
         codeEditor.setText(sprite.sourceCode);
+        refreshReadableJavaView();
         lastCompiledText = sprite.sourceCode;
         codeEditor.setCaretPosition(0);
         codeEditor.discardAllEdits();
         refreshSlots();
+        rebuildBlockCanvas();
+    }
+
+    /** Reload the selected project source after package/type metadata changes. */
+    public void reloadSpriteCode(SpriteData sprite) {
+        currentSprite = null;
+        loadSpriteCode(sprite);
     }
 
     public void saveCurrentCode() {
@@ -656,6 +1135,9 @@ public class CodeWorkspace extends JPanel {
             try { Class.forName("java.util." + expr); return true; } catch (Exception e2) {}
             ClassLoader loader = ProjectRunner.getProjectClassLoader();
             if (loader != null) {
+                if (currentSprite != null) {
+                    try { loader.loadClass(currentSprite.packageName + "." + expr); return true; } catch (Exception ignored) {}
+                }
                 try { loader.loadClass("generated." + expr); return true; } catch (Exception e3) {}
             }
         }
@@ -667,7 +1149,7 @@ public class CodeWorkspace extends JPanel {
             if (currentSprite == null) return null;
             ClassLoader loader = ProjectRunner.getProjectClassLoader();
             if (loader != null) {
-                try { return loader.loadClass("generated." + currentSprite.name); } catch (Exception e) {}
+                try { return loader.loadClass(currentSprite.getQualifiedName()); } catch (Exception e) {}
             }
             // If it's the "Main" class, don't fall back to Sprite.class
             if ("Main".equals(currentSprite.name)) return null;
@@ -681,6 +1163,9 @@ public class CodeWorkspace extends JPanel {
         
         ClassLoader loader = ProjectRunner.getProjectClassLoader();
         if (loader != null) {
+            if (currentSprite != null) {
+                try { return loader.loadClass(currentSprite.packageName + "." + expr); } catch (Exception ignored) {}
+            }
             try { return loader.loadClass("generated." + expr); } catch (Exception e) {}
         }
 

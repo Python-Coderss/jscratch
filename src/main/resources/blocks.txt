@@ -18,19 +18,47 @@ public class Sprite${id} extends Sprite {
     /* slot end [id:"${id}_members"] */
 }
 ###
-# Method : Structure : inClassNotMethod
-public void myMethod${id}() {
+# Method : Structure : inClassNotMethod : docs=Create a named method that can be called from other blocks or Java code.
+public void ${param:methodName:value:myMethod}() {
     /* slot start [id:"${id}_method_body" tags:"inInstanceMethod"] */
     
     /* slot end [id:"${id}_method_body"] */
 }
 ###
-# Method Static : Structure : inClassNotMethod
-public static void myMethod${id}() {
+# Method With Parameters : Structure : inClassNotMethod : docs=Create a method that accepts values from each call.
+public void ${param:methodName:value:myMethod}(${param:type:value:int} ${param:parameterName:value:amount}) {
+    /* slot start [id:"${id}_method_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_method_body"] */
+}
+###
+# Static Method : Structure : inClassNotMethod : docs=Create a static method that can be called through its class name.
+public static void ${param:methodName:value:myMethod}() {
     /* slot start [id:"${id}_method_body_static" tags:"inStaticMethod"] */
     
     /* slot end [id:"${id}_method_body_static"] */
 }
+###
+# Call Method : My Blocks : inInstanceMethod : docs=Call a method defined in this sprite; use its exact method name.
+/* block comment [block:"call_${id}" text:"Call a method defined in this sprite."] */
+/* block start [id:"call_${id}" category:"My Blocks" label:"call method" shape:"command" docs:"Call a method defined in this sprite."] */
+/* param start [id:"method_${id}" type:"value"] */${param:methodName:value:myMethod}/* param end [id:"method_${id}"] */();
+/* block end [id:"call_${id}"] */
+###
+# Call Method With Arguments : My Blocks : inInstanceMethod : docs=Call a method and pass Java values in its argument list.
+/* block comment [block:"call_${id}" text:"Call a method and pass values to its parameters."] */
+/* block start [id:"call_${id}" category:"My Blocks" label:"call method with arguments" shape:"command" docs:"Call a method and pass Java values to its parameters."] */
+/* param start [id:"method_${id}" type:"value"] */${param:methodName:value:myMethod}/* param end [id:"method_${id}"] */(${param:arguments:value:0});
+/* block end [id:"call_${id}"] */
+###
+# Call Static Method : My Blocks : inStaticMethod : docs=Call a static method using its class and method names.
+/* block comment [block:"call_${id}" text:"Call a static method through its class."] */
+/* block start [id:"call_${id}" category:"My Blocks" label:"call static method" shape:"command" docs:"Call a static method through its class."] */
+${param:className:value:MyClass}.${param:methodName:value:myMethod}(${param:arguments:value:0});
+/* block end [id:"call_${id}"] */
+###
+# Return Value : Control : inInstanceMethod : docs=Return a value from a non-void method.
+return ${param:value:value:0};
 ###
 # Move Steps : Motion : inInstanceMethod
 move(10);
@@ -71,6 +99,17 @@ ifOnEdgeBounce();
 # Set Rotation Style : Motion : inInstanceMethod
 setRotationStyle(RotationStyle.ALL_AROUND);
 ###
+# Velocity Move : Motion : inInstanceMethod
+// place inside a forever loop
+changeXBy(velocityX);
+changeYBy(velocityY);
+###
+# Clamp To Stage : Motion : inInstanceMethod
+ifOnEdgeBounce();
+###
+# Distance To Sprite : Sensing : inInstanceMethod
+Math.hypot(getX() - other.getX(), getY() - other.getY())
+###
 # Say For Seconds : Looks : inInstanceMethod
 say("Hello!", 2);
 ###
@@ -106,6 +145,33 @@ show();
 ###
 # Hide : Looks : inInstanceMethod
 hide();
+###
+# Add Costume : Looks : inInstanceMethod
+
+
+		addCostume(new Costume(
+		
+			"NAME OF YOUR COSTUME",
+			"jscratch_ws/assets/"+
+			"YOURSPRITE.png",
+			32, //change this to be half your sprite width, this is for rotation
+			32 //change this to be half your sprite height, this is for rotation
+		));
+###
+# Animate Frames : Looks : inInstanceMethod
+// cycle through costumes — call inside a loop with a short wait
+nextCostume();
+wait(0.12);
+###
+# Go To Front : Looks : inInstanceMethod
+Stage.getInstance().goToFront(this);
+###
+# Go To Back : Looks : inInstanceMethod
+Stage.getInstance().goToBack(this);
+###
+# Draw Text : Looks : inInstanceMethod
+// override draw(Graphics2D g) for custom HUD; example:
+// public void draw(java.awt.Graphics2D g) { super.draw(g); g.setColor(Color.WHITE); g.drawString("Score: " + score, 10, 20); }
 ###
 # Play Sound : Sound : inInstanceMethod
 playSound("jscratch_ws/assets/pop.wav");
@@ -189,6 +255,13 @@ while (!(/* condition */ false)) {
     waitTillNextFrame();
 }
 ###
+# Start Script : Control : inInstanceMethod
+startScript(() -> {
+    /* slot start [id:"${id}_thread_body" tags:"inInstanceMethod"] */
+    
+    /* slot end [id:"${id}_thread_body"] */
+});
+###
 # Touching Sprite? : Sensing : inInstanceMethod
 isTouching(otherSprite);
 ###
@@ -201,6 +274,10 @@ if (
     ) {
 	 
 }
+###
+# Keys WASD Held? : Sensing : inInstanceMethod
+// true if any of WASD is held — edge-trigger by comparing to a prev boolean
+Stage.getInstance().isKeyPressed("w") || Stage.getInstance().isKeyPressed("a") || Stage.getInstance().isKeyPressed("s") || Stage.getInstance().isKeyPressed("d")
 ###
 # Mouse Down? : Sensing : inInstanceMethod
 Stage.getInstance().isMouseDown();
@@ -216,6 +293,12 @@ Stage.getInstance().getTimer();
 ###
 # Reset Timer : Sensing : inInstanceMethod
 Stage.getInstance().resetTimer();
+###
+# World Scroll Camera : Sensing : inInstanceMethod
+// world -> screen: screenX = (worldX + scrollX)*scale ; scroll via Scroller2d or your own camera vars
+###
+# Tile Collision? : Sensing : inInstanceMethod
+// example with Scroller2d/BCollider: willCollide(nextX, nextY) or Scroller2d.getInstance().isColliding(wx, wy, w, h)
 ###
 # Pick Random : Operators : inInstanceMethod
 pickRandom(1, 10);
@@ -253,6 +336,12 @@ lengthOf("apple");
 # Round : Operators : inInstanceMethod
 Math.round(3.5)
 ###
+# Clamp Value : Operators : inInstanceMethod
+Math.max(0, Math.min(100, value))
+###
+# Lerp : Operators : inInstanceMethod
+(a + (b - a) * t)
+###
 # Set Variable : Variables : inInstanceMethod
 setVariable("myVar", 0);
 ###
@@ -274,27 +363,8 @@ itemOfList("myList", 1);
 # Number : Operators : literal
 0
 ###
-# Method : Structure : inClassNotMethod
-public void myMethod() {
-    /* slot start [id:"${id}method_body" tags:"inInstanceMethod"] */
-    
-    /* slot end [id:"${id}method_body"] */
-}
-###
 # Parameter : Structure : inParameterList
 /* slot start [id:"${id}param" tags:"literal" onlyOne:true] */ /* slot end [id:"${id}param"] */
-###
-# Add Costume : Looks : inInstanceMethod
-
-
-		addCostume(new Costume(
-		
-			"NAME OF YOUR COSTUME",
-			"jscratch_ws/assets/"+
-			"YOURSPRITE.png",
-			32, //change this to be half your sprite width, this is for rotation
-			32 //change this to be half your sprite height, this is for rotation
-		));
 ###
 # Add Sprite : Helpers : stage
 
@@ -341,4 +411,129 @@ try {
 } catch (InterruptedException e) {
 	e.printStackTrace();
 }
+###
+# Camera Follow : Camera : inInstanceMethod
+// camera follows this sprite: call from your player each frame
+Scroller2d sc = Scroller2d.getInstance(); sc.x = -((int) getX()); sc.y = -((int) getY()); sc.update();
+###
+# Camera Lerp Follow : Camera : inInstanceMethod
+// smooth follow: keep lastCamX/Y fields and lerp toward target each frame
+###
+# Register World Sprite : World : inInstanceMethod
+// add a BSprite subclass to the world so camera moves it
+###
+# Add Collider : World : inInstanceMethod
+Scroller2d.getInstance().addCollider(x - w/2, y - h/2, w, h);
+###
+# Tilemap 3x3 : World : inInstanceMethod
+// see Scroller2d / MapMakerPanel — MapMaker handles asset<->tileId and displayscale
+###
+# Minimap Tile : World : inInstanceMethod
+// MinimapTile / MinimapConfig / MinimapSprite handle the minimap layer (uses same tile costumes)
+###
+# Physics Step : Physics : inInstanceMethod
+// tryMove(dx, dy) slides on walls; willCollide(x,y) predicts wall hits
+###
+# Gravity Tick : Physics : inInstanceMethod
+// vy += gravity; tryMove(0, vy); if (willCollide(x, y+1)) vy = 0;  // put in your player loop
+###
+# Friction Tick : Physics : inInstanceMethod : docs=Slow a moving value each update until it nearly stops.
+// vx *= 0.9; if (Math.abs(vx) < 0.1) vx = 0;
+###
+# Set Local Variable : Variables : inInstanceMethod : docs=Store a value once in a local variable and reuse it; avoids repeated computation and reduces runtime work.
+int cachedValue = 0;
+###
+# Set Local Text : Variables : inInstanceMethod : docs=Store text in a local variable for reuse.
+String cachedText = "text";
+###
+# Set Local Boolean : Variables : inInstanceMethod : docs=Store a true or false result and reuse it.
+boolean isReady = false;
+###
+# Change Local Number : Variables : inInstanceMethod : docs=Update an existing local number without recalculating its original value.
+cachedValue += 1;
+###
+# If : Control : inInstanceMethod : docs=Run the nested blocks when a condition is true.
+if (true) {
+    /* slot start [id:"${id}_body" tags:"inInstanceMethod"] */
+    /* slot end [id:"${id}_body"] */
+}
+###
+# If Else : Control : inInstanceMethod : docs=Choose between two nested stacks using a condition.
+if (true) {
+    /* slot start [id:"${id}_then" tags:"inInstanceMethod"] */
+    /* slot end [id:"${id}_then"] */
+} else {
+    /* slot start [id:"${id}_else" tags:"inInstanceMethod"] */
+    /* slot end [id:"${id}_else"] */
+}
+###
+# Repeat Count : Control : inInstanceMethod : docs=Run the nested blocks a fixed number of times.
+for (int repeatIndex = 0; repeatIndex < 10; repeatIndex++) {
+    /* slot start [id:"${id}_body" tags:"inInstanceMethod"] */
+    /* slot end [id:"${id}_body"] */
+}
+###
+# Repeat While : Control : inInstanceMethod : docs=Repeat nested blocks while the condition remains true.
+while (true) {
+    /* slot start [id:"${id}_body" tags:"inInstanceMethod"] */
+    /* slot end [id:"${id}_body"] */
+    waitTillNextFrame();
+}
+###
+# Wait Until : Control : inInstanceMethod : docs=Wait for a condition without blocking the next frame.
+while (!true) waitTillNextFrame();
+###
+# Stop This Script : Control : inInstanceMethod : docs=Return from the current method/script.
+return;
+###
+# When Program Starts : Events : inInstanceMethod : docs=Run a stack once when this sprite is created.
+startScript(() -> {
+    /* slot start [id:"${id}_body" tags:"inInstanceMethod"] */
+    /* slot end [id:"${id}_body"] */
+});
+###
+# When I Receive Message : Events : inInstanceMethod : docs=Run a stack when another sprite broadcasts this message.
+whenIReceive("message1", () -> {
+    /* slot start [id:"${id}_body" tags:"inInstanceMethod"] */
+    /* slot end [id:"${id}_body"] */
+});
+###
+# Broadcast Message : Events : inInstanceMethod : docs=Send a named message to matching event stacks.
+broadcast("message1");
+###
+# Key Pressed : Sensing : inInstanceMethod : docs=Read whether a keyboard key is currently held.
+Stage.getInstance().isKeyPressed("space");
+###
+# Mouse Pressed : Sensing : inInstanceMethod : docs=Read whether the mouse button is currently held.
+Stage.getInstance().isMouseDown();
+###
+# Current X : Motion : inInstanceMethod : docs=Read this sprite's horizontal stage coordinate.
+getX();
+###
+# Current Y : Motion : inInstanceMethod : docs=Read this sprite's vertical stage coordinate.
+getY();
+###
+# Random Number : Operators : inInstanceMethod : docs=Choose an integer in the inclusive range.
+pickRandom(1, 10);
+###
+# Compare Values : Operators : inInstanceMethod : docs=Compare two values and use the Boolean result.
+(0 > 0);
+###
+# Add Numbers : Operators : inInstanceMethod : docs=Add two numeric inputs.
+(0 + 0);
+###
+# Multiply Numbers : Operators : inInstanceMethod : docs=Multiply two numeric inputs.
+(1 * 1);
+###
+# And Conditions : Operators : inInstanceMethod : docs=True only when both Boolean inputs are true.
+(true && true);
+###
+# Or Conditions : Operators : inInstanceMethod : docs=True when either Boolean input is true.
+(false || false);
+###
+# Not Condition : Operators : inInstanceMethod : docs=Flip a Boolean value.
+(!false);
+###
+# Join Text : Operators : inInstanceMethod : docs=Combine two values into one string.
+join("hello ", "world");
 ###

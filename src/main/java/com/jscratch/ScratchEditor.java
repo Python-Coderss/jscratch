@@ -8,6 +8,9 @@ import com.jscratch.compiler.CompilerService;
 import com.jscratch.compiler.ProjectRunner;
 import com.jscratch.compiler.CompilationResult;
 import javax.swing.*;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreePath;
 import java.awt.*;
 import java.io.*;
 import java.nio.file.*;
@@ -26,11 +29,15 @@ public class ScratchEditor extends JFrame {
     private MapMakerPanel mapMakerPanel;
     private FileManagerPanel fileManagerPanel;
     
-    private DefaultListModel<String> spriteListModel = new DefaultListModel<>();
-    private JList<String> spriteList = new JList<>(spriteListModel);
+    /** Package folders and Java source files shown in the Code workspace tree. */
+    private DefaultMutableTreeNode sourceRoot = new DefaultMutableTreeNode("Sources");
+    private DefaultTreeModel sourceTreeModel = new DefaultTreeModel(sourceRoot);
+    private JTree spriteList = new JTree(sourceTreeModel);
 
     private JTextArea consoleArea;
     private File currentProjectFile;
+    /** Package declaration/path mismatches are rejected before writing compiler sources. */
+    private final List<String> sourceLayoutErrors = new ArrayList<>();
 
     public ScratchEditor() {
         WorkspaceManager.ensureDirs();
@@ -62,7 +69,9 @@ public class ScratchEditor extends JFrame {
         spritePanel.setBackground(Color.WHITE);
         spritePanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         
-        spriteList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        spriteList.getSelectionModel().setSelectionMode(javax.swing.tree.TreeSelectionModel.SINGLE_TREE_SELECTION);
+        spriteList.setRootVisible(false);
+        spriteList.setShowsRootHandles(true);
         spritePanel.add(new JScrollPane(spriteList), BorderLayout.CENTER);
         
         JPopupMenu spriteMenu = new JPopupMenu();
@@ -82,17 +91,25 @@ public class ScratchEditor extends JFrame {
                 if (e.isPopupTrigger()) showMenu(e);
             }
             private void showMenu(java.awt.event.MouseEvent e) {
-                int index = spriteList.locationToIndex(e.getPoint());
-                if (index != -1) {
-                    spriteList.setSelectedIndex(index);
-                    spriteMenu.show(e.getComponent(), e.getX(), e.getY());
+                TreePath path = spriteList.getPathForLocation(e.getX(), e.getY());
+                if (path != null && path.getLastPathComponent() instanceof DefaultMutableTreeNode) {
+                    Object value = ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
+                    if (value instanceof SpriteData) {
+                        spriteList.setSelectionPath(path);
+                        spriteMenu.show(e.getComponent(), e.getX(), e.getY());
+                    }
                 }
             }
         });
         
-        JButton addSpriteBtn = new JButton("Add Sprite");
+        JPanel sourceActions = new JPanel(new GridLayout(2, 1, 0, 4));
+        JButton addSpriteBtn = new JButton("Add Source");
         addSpriteBtn.addActionListener(e -> addSprite());
-        spritePanel.add(addSpriteBtn, BorderLayout.SOUTH);
+        JButton movePackageBtn = new JButton("Move to Package...");
+        movePackageBtn.addActionListener(e -> moveSelectedSourcePackage());
+        sourceActions.add(addSpriteBtn);
+        sourceActions.add(movePackageBtn);
+        spritePanel.add(sourceActions, BorderLayout.SOUTH);
         
         rightPanel.add(spritePanel, BorderLayout.CENTER);
 
@@ -106,11 +123,10 @@ public class ScratchEditor extends JFrame {
         
         setJMenuBar(createMenuBar());
         
-        spriteList.addListSelectionListener(e -> {
-            int idx = spriteList.getSelectedIndex();
-            if (idx != -1) {
+        spriteList.addTreeSelectionListener(e -> {
+            SpriteData sd = getSelectedSource();
+            if (sd != null) {
                 codeWorkspace.saveCurrentCode();
-                SpriteData sd = project.sprites.get(idx);
                 codeWorkspace.loadSpriteCode(sd);
                 soundPanel.refreshList(sd.sounds);
             }
@@ -163,6 +179,23 @@ public class ScratchEditor extends JFrame {
         SwingUtilities.invokeLater(() -> consoleArea.setText(""));
     }
 
+    private void refreshPackageErrors() {
+        sourceLayoutErrors.clear();
+        File srcRoot = WorkspaceManager.getSrcDir();
+        List<File> files = new ArrayList<>();
+        addJavaFilesRecursive(srcRoot, files);
+        for (File file : files) {
+            try {
+                String declared = packageOf(new String(Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8));
+                String folder = packageForFolder(srcRoot, file.getParentFile());
+                if (!declared.equals(folder)) sourceLayoutErrors.add(file.getPath() + " declares package '"
+                        + displayPackage(declared) + "' but is in package folder '" + displayPackage(folder) + "'.");
+            } catch (IOException ex) {
+                sourceLayoutErrors.add("Could not read " + file.getPath() + ": " + ex.getMessage());
+            }
+        }
+    }
+
     private void ensureMainSprite() {
         boolean found = false;
         for (SpriteData sd : project.sprites) {
@@ -175,6 +208,14 @@ public class ScratchEditor extends JFrame {
             SpriteData main = new SpriteData("Main");
             main.sourceCode = generateDefaultMainCode();
             project.sprites.add(0, main);
+        } else {
+            for (SpriteData sprite : project.sprites) {
+                if ("Main".equals(sprite.name) && sprite.sourceCode.trim().isEmpty()) {
+                    sprite.packageName = "generated";
+                    sprite.sourceCode = generateDefaultMainCode();
+                    break;
+                }
+            }
         }
     }
 
@@ -184,27 +225,60 @@ public class ScratchEditor extends JFrame {
 
         List<File> allJavaFiles = new ArrayList<>();
         addJavaFilesRecursive(srcDir, allJavaFiles);
+        sourceLayoutErrors.clear();
+        java.util.Set<String> discoveredTypes = new java.util.HashSet<>();
 
         for (File f : allJavaFiles) {
-            String className = f.getName().replace(".java", "");
             try {
-                String content = new String(Files.readAllBytes(f.toPath()));
+                String content = new String(Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+                String declaredPackage = packageOf(content);
+                String folderPackage = packageForFolder(srcDir, f.getParentFile());
+                if (!folderPackage.equals(declaredPackage)) {
+                    sourceLayoutErrors.add(f.getPath() + " declares package '" + displayPackage(declaredPackage)
+                            + "' but is in package folder '" + displayPackage(folderPackage) + "'.");
+                }
+                String className = f.getName().substring(0, f.getName().length() - ".java".length());
+                String relativeSourcePath = srcDir.toPath().relativize(f.toPath()).toString().replace('\\', '/');
+                String qualifiedName = qualifiedName(declaredPackage, className);
+                String compilerTypeName = typeNameForPath(relativeSourcePath);
+                discoveredTypes.add(compilerTypeName);
+                // Every workspace source is migrated to comment-annotated Scratch blocks
+                // in memory; compilation still sees ordinary Java because markers are comments.
+                String blockSource = ScratchBlockAnnotator.annotate(content, className);
                 boolean found = false;
                 for (SpriteData sd : project.sprites) {
-                    if (sd.name.equals(className)) {
-                        sd.sourceCode = content;
+                    // Reuse the two default project placeholders when a source
+                    // file is in the unnamed package; all other files match by FQN.
+                    boolean sameIdentity = sd.getQualifiedName().equals(qualifiedName)
+                            || compilerTypeName.equals(classNameForSourcePath(sd));
+                    boolean emptyPlaceholder = sd.sourceCode.trim().isEmpty()
+                            && sd.name.equals(className);
+                    if (sameIdentity || emptyPlaceholder) {
+                        sd.name = className;
+                        sd.packageName = declaredPackage;
+                        sd.sourcePath = relativeSourcePath;
+                        sd.sourceCode = blockSource;
                         found = true;
                         break;
                     }
                 }
                 if (!found) {
                     SpriteData sd = new SpriteData(className);
-                    sd.sourceCode = content;
+                    sd.packageName = declaredPackage;
+                    sd.sourcePath = relativeSourcePath;
+                    sd.sourceCode = blockSource;
                     project.sprites.add(sd);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
+        // Retain editor-created sources that have not yet been written to the workspace.
+        project.sprites.removeIf(sprite -> sprite.sourcePath != null && !sprite.sourcePath.trim().isEmpty()
+                && !discoveredTypes.contains(classNameForSourcePath(sprite)));
+        if (!sourceLayoutErrors.isEmpty()) {
+            logToConsole("Source package layout needs attention before compiling:");
+            for (String error : sourceLayoutErrors) logToConsole("  " + error);
         }
     }
 
@@ -220,17 +294,164 @@ public class ScratchEditor extends JFrame {
         }
     }
 
+    /** Rebuild the collapsible, segment-by-segment package tree from project sources. */
     private void refreshSpriteList() {
-        spriteListModel.clear();
+        sourceRoot.removeAllChildren();
+        java.util.Map<String, DefaultMutableTreeNode> packages = new java.util.TreeMap<>();
         for (SpriteData sd : project.sprites) {
-            spriteListModel.addElement(sd.name);
+            String packageName = sd.packageName == null ? "" : sd.packageName.trim();
+            DefaultMutableTreeNode parent = sourceRoot;
+            if (!packageName.isEmpty()) {
+                StringBuilder path = new StringBuilder();
+                for (String segment : packageName.split("\\.")) {
+                    if (path.length() > 0) path.append('.');
+                    path.append(segment);
+                    String key = path.toString();
+                    DefaultMutableTreeNode packageNode = packages.get(key);
+                    if (packageNode == null) {
+                        packageNode = new DefaultMutableTreeNode(segment);
+                        packages.put(key, packageNode);
+                        parent.add(packageNode);
+                    }
+                    parent = packageNode;
+                }
+            } else if (packages.get("") == null) {
+                DefaultMutableTreeNode defaultPackage = new DefaultMutableTreeNode("(default package)");
+                packages.put("", defaultPackage);
+                sourceRoot.add(defaultPackage);
+                parent = defaultPackage;
+            } else {
+                parent = packages.get("");
+            }
+            parent.add(new DefaultMutableTreeNode(sd));
         }
-        if (!project.sprites.isEmpty()) {
-            spriteList.setSelectedIndex(0);
-            SpriteData sd = project.sprites.get(0);
-            codeWorkspace.loadSpriteCode(sd);
-            soundPanel.refreshList(sd.sounds);
+        boolean hasUnselectedPackageErrors = false;
+        for (String error : sourceLayoutErrors) {
+            boolean represented = false;
+            for (SpriteData source : project.sprites) {
+                if (error.contains(source.name + ".java")) { represented = true; break; }
+            }
+            if (!represented) { hasUnselectedPackageErrors = true; break; }
         }
+        if (hasUnselectedPackageErrors) {
+            DefaultMutableTreeNode warning = new DefaultMutableTreeNode("Package path mismatch — see console");
+            warning.setAllowsChildren(false);
+            sourceRoot.add(warning);
+        }
+        sourceTreeModel.reload();
+        // Keep package groups collapsible. Only reveal a path when selecting a
+        // source file (or when there is no previous selection at all).
+        SpriteData initial = null;
+        for (SpriteData sd : project.sprites) if ("Main".equals(sd.name)) { initial = sd; break; }
+        if (initial == null && !project.sprites.isEmpty()) initial = project.sprites.get(0);
+        if (initial != null) {
+            for (int row = 0; row < spriteList.getRowCount(); row++) {
+                Object value = ((DefaultMutableTreeNode) spriteList.getPathForRow(row).getLastPathComponent()).getUserObject();
+                if (value == initial) {
+                    TreePath sourcePath = spriteList.getPathForRow(row);
+                    if (sourcePath != null) spriteList.expandPath(sourcePath.getParentPath());
+                    break;
+                }
+            }
+            selectSource(initial);
+            codeWorkspace.loadSpriteCode(initial);
+            soundPanel.refreshList(initial.sounds);
+        }
+    }
+
+    /** Return the selected source leaf (package folder selections are not editable). */
+    private SpriteData getSelectedSource() {
+        TreePath path = spriteList.getSelectionPath();
+        if (path == null) return null;
+        Object node = path.getLastPathComponent();
+        if (!(node instanceof DefaultMutableTreeNode)) return null;
+        Object value = ((DefaultMutableTreeNode) node).getUserObject();
+        return value instanceof SpriteData ? (SpriteData) value : null;
+    }
+
+    /** Select a source file by object identity after rebuilding the package tree. */
+    private void selectSource(SpriteData source) {
+        java.util.Enumeration<?> nodes = sourceRoot.depthFirstEnumeration();
+        while (nodes.hasMoreElements()) {
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) nodes.nextElement();
+            if (node.getUserObject() == source) {
+                spriteList.setSelectionPath(new TreePath(node.getPath()));
+                return;
+            }
+        }
+    }
+
+    /** Read a Java package declaration; an omitted declaration means the default package. */
+    private static String packageOf(String source) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;")
+                .matcher(source == null ? "" : source);
+        return matcher.find() ? matcher.group(1) : "";
+    }
+
+    /** Translate a source directory into its expected dotted Java package. */
+    private static String packageForFolder(File sourceRoot, File directory) {
+        String relative = sourceRoot.getAbsoluteFile().toPath().relativize(directory.getAbsoluteFile().toPath()).toString();
+        return relative.replace(File.separatorChar, '.').replace('/', '.').replace('\\', '.');
+    }
+
+    /** Infer a type name from a workspace-relative Java file path. */
+    private static String typeNameForPath(String relativePath) {
+        String normalized = relativePath.replace('\\', '/');
+        if (normalized.endsWith(".java")) normalized = normalized.substring(0, normalized.length() - 5);
+        return normalized.replace('/', '.');
+    }
+
+    private static String qualifiedName(String packageName, String typeName) {
+        return packageName == null || packageName.trim().isEmpty()
+                ? typeName : packageName.trim() + "." + typeName;
+    }
+
+    /** Strip the package from an FQN; default-package types have no separator. */
+    private static String simpleName(String qualifiedType) {
+        int separator = qualifiedType.lastIndexOf('.');
+        return separator < 0 ? qualifiedType : qualifiedType.substring(separator + 1);
+    }
+
+    private static String displayPackage(String packageName) {
+        return packageName == null || packageName.isEmpty() ? "(default package)" : packageName;
+    }
+
+    /** Extract the Java type name (package and class) from a qualified compiler identity. */
+    private static String sourceTypeForPackageAndClass(String packageName, String typeName) {
+        return packageName == null || packageName.isEmpty() ? typeName : packageName + "." + typeName;
+    }
+
+    /** Ensure the package field in the navigator agrees with the actual Java source. */
+    private List<String> validateProjectPackages() {
+        List<String> errors = new ArrayList<>();
+        for (SpriteData sprite : project.sprites) {
+            String declared = packageOf(sprite.sourceCode);
+            String selected = sprite.packageName == null ? "" : sprite.packageName.trim();
+            if (sprite.sourcePath == null || sprite.sourcePath.trim().isEmpty()) {
+                // Older project JSON uses its class identity as its path.
+                sprite.sourcePath = sprite.getQualifiedName().replace('.', '/') + ".java";
+            }
+            String sourcePathPackage = packageForSourcePath(sprite.getSourcePath());
+            if (!declared.equals(selected)) {
+                errors.add(sprite.getQualifiedName() + " declares package '" + displayPackage(declared)
+                        + "' but the source tree identifies it as '" + displayPackage(selected) + "'.");
+            }
+            if (!sourcePathPackage.equals(selected)) {
+                errors.add(sprite.getSourcePath() + " is under package folder '" + displayPackage(sourcePathPackage)
+                        + "' but its type belongs to '" + displayPackage(selected) + "'.");
+            }
+        }
+        errors.addAll(sourceLayoutErrors);
+        return errors;
+    }
+
+    /** Expected Java package derived from a project-relative .java path. */
+    private static String packageForSourcePath(String sourcePath) {
+        if (sourcePath == null || sourcePath.trim().isEmpty()) return "";
+        String normalized = sourcePath.replace('\\', '/');
+        int separator = normalized.lastIndexOf('/');
+        return separator < 0 ? "" : normalized.substring(0, separator).replace('/', '.');
     }
 
     private String generateDefaultMainCode() {
@@ -249,12 +470,31 @@ public class ScratchEditor extends JFrame {
     }
 
     private void addSprite() {
-        String name = JOptionPane.showInputDialog(this, "Enter Sprite Name:", "Sprite" + (project.sprites.size() + 1));
-        if (name == null || name.trim().isEmpty()) return;
-        name = name.trim();
-        
+        String qualifiedType = JOptionPane.showInputDialog(this,
+                "Enter a Java type or fully qualified name (for example: game.ui.HudSprite):",
+                "Sprite" + (project.sprites.size() + 1));
+        if (qualifiedType == null || qualifiedType.trim().isEmpty()) return;
+        qualifiedType = qualifiedType.trim();
+        String[] nameParts = qualifiedType.split("\\.");
+        String name = nameParts[nameParts.length - 1];
+        String packageName = nameParts.length == 1 ? "generated"
+                : qualifiedType.substring(0, qualifiedType.length() - name.length() - 1);
+        if (!name.matches("[A-Za-z_$][A-Za-z0-9_$]*")
+                || (!packageName.isEmpty() && !packageName.matches("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*"))) {
+            JOptionPane.showMessageDialog(this, "Use valid Java identifiers separated by dots.", "Invalid type name", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        for (SpriteData other : project.sprites) {
+            if (other.getQualifiedName().equals(qualifiedName(packageName, name))) {
+                JOptionPane.showMessageDialog(this, "That fully qualified type already exists.", "Duplicate type", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        }
+
         SpriteData sd = new SpriteData(name);
-        String template = "package generated;\n\n" +
+        sd.packageName = packageName;
+        String packageLine = packageName.isEmpty() ? "" : "package " + packageName + ";\n\n";
+        String template = packageLine +
             "import com.jscratch.*;\n" +
             "import java.awt.Color;\n" +
             "import java.awt.event.KeyEvent;\n\n" +
@@ -270,15 +510,87 @@ public class ScratchEditor extends JFrame {
             "    /* slot end [id:\"" + name + "_members\"] */\n" +
             "}";
         sd.sourceCode = template;
+        sd.sourcePath = qualifiedName(packageName, name).replace('.', '/') + ".java";
         project.sprites.add(sd);
-        spriteListModel.addElement(name);
-        spriteList.setSelectedIndex(project.sprites.size() - 1);
+        refreshSpriteList();
+        selectSource(sd);
+    }
+
+    /** Change a source's package and its declaration together, keeping folder identity valid. */
+    private void moveSelectedSourcePackage() {
+        SpriteData source = getSelectedSource();
+        if (source == null) return;
+        codeWorkspace.saveCurrentCode();
+        String currentPackage = source.packageName == null ? "" : source.packageName;
+        String requested = JOptionPane.showInputDialog(this,
+                "Enter the package name (blank for the default package):", currentPackage);
+        if (requested == null) return;
+        String newPackage = requested.trim();
+        if (!newPackage.isEmpty() && !newPackage.matches("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*")) {
+            JOptionPane.showMessageDialog(this, "Use valid Java identifiers separated by dots.", "Invalid package", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        String oldPackage = source.packageName == null ? "" : source.packageName.trim();
+        String newQualifiedName = qualifiedName(newPackage, source.name);
+        String sourceTypeName = classNameForSourcePath(source);
+        String sourceSimpleName = simpleName(sourceTypeName);
+        String newSourceType = sourceTypeForPackageAndClass(newPackage, sourceSimpleName);
+        for (SpriteData other : project.sprites) {
+            if (other != source && (newQualifiedName.equals(other.getQualifiedName())
+                    || newSourceType.equals(classNameForSourcePath(other)))) {
+                JOptionPane.showMessageDialog(this, "That fully qualified type already exists.", "Duplicate type", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        }
+        java.util.regex.Pattern declaration = java.util.regex.Pattern.compile("(?m)^\\s*package\\s+[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*\\s*;\\s*");
+        java.util.regex.Matcher matcher = declaration.matcher(source.sourceCode);
+        String oldSourceCode = source.sourceCode;
+        String oldSourcePath = source.getSourcePath();
+        String packageLine = newPackage.isEmpty() ? "" : "package " + newPackage + ";\n";
+        if (matcher.find()) source.sourceCode = matcher.replaceFirst(java.util.regex.Matcher.quoteReplacement(packageLine));
+        else if (!newPackage.isEmpty()) source.sourceCode = packageLine + source.sourceCode;
+        source.packageName = newPackage;
+        source.sourcePath = newSourceType.replace('.', '/') + ".java";
+        try {
+            relocateWorkspaceSource(oldSourcePath, source, newSourceType);
+        } catch (IOException ex) {
+            source.packageName = oldPackage;
+            source.sourceCode = oldSourceCode;
+            source.sourcePath = oldSourcePath;
+            JOptionPane.showMessageDialog(this, "Could not move the source file: " + ex.getMessage(), "Move failed", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        // Custom basenames survive moves; only their package folders change.
+        refreshPackageErrors();
+        refreshSpriteList();
+        selectSource(source);
+        codeWorkspace.reloadSpriteCode(source);
+        autoCompile();
+    }
+
+    /** Move an on-disk source file along with its package metadata. */
+    private void relocateWorkspaceSource(String oldRelativePath, SpriteData source, String newQualifiedName) throws IOException {
+        File root = WorkspaceManager.getSrcDir();
+        File oldFile = new File(root, oldRelativePath.replace('/', File.separatorChar));
+        File newFile = new File(root, newQualifiedName.replace('.', File.separatorChar) + ".java");
+
+
+        if (!oldFile.exists()) return;
+        File parent = newFile.getParentFile();
+        if (parent != null) Files.createDirectories(parent.toPath());
+        if (!oldFile.equals(newFile)) {
+            try {
+                Files.move(oldFile.toPath(), newFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(oldFile.toPath(), newFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+        source.sourcePath = root.toPath().relativize(newFile.toPath()).toString().replace('\\', '/');
     }
 
     private void renameSprite() {
-        int idx = spriteList.getSelectedIndex();
-        if (idx == -1) return;
-        SpriteData sd = project.sprites.get(idx);
+        SpriteData sd = getSelectedSource();
+        if (sd == null) return;
         if (sd.name.equals("Main")) {
             JOptionPane.showMessageDialog(this, "Cannot rename Main sprite.");
             return;
@@ -290,27 +602,41 @@ public class ScratchEditor extends JFrame {
 
         // Check for duplicates
         for (SpriteData other : project.sprites) {
-            if (other.name.equals(newName)) {
+            if (other != sd && other.getQualifiedName().equals(qualifiedName(sd.packageName, newName))) {
                 JOptionPane.showMessageDialog(this, "A sprite with this name already exists.");
                 return;
             }
         }
 
         String oldName = sd.name;
+        String oldQualifiedName = sd.getQualifiedName();
+        String oldSourcePath = sd.getSourcePath();
+        String oldSourceCode = sd.sourceCode;
         sd.name = newName;
-        
-        // Update source code
-        sd.sourceCode = sd.sourceCode.replace(oldName, newName);
+        sd.sourcePath = qualifiedName(sd.packageName, newName).replace('.', '/') + ".java";
+        // Update only declarations and constructor names, never comments or calls.
+        sd.sourceCode = sd.sourceCode.replaceAll("(\\bclass\\s+)" + java.util.regex.Pattern.quote(oldName) + "\\b", java.util.regex.Matcher.quoteReplacement("$1" + newName))
+                .replaceAll("(\\bpublic\\s+)" + java.util.regex.Pattern.quote(oldName) + "(\\s*\\()", java.util.regex.Matcher.quoteReplacement("$1" + newName + "$2"));
+        try {
+            relocateWorkspaceSource(oldSourcePath, sd, sd.getQualifiedName());
+        } catch (IOException ex) {
+            sd.name = oldName;
+            sd.sourcePath = oldSourcePath;
+            sd.sourceCode = oldSourceCode;
+            JOptionPane.showMessageDialog(this, "Could not move the source file: " + ex.getMessage(), "Rename failed", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-        spriteListModel.set(idx, newName);
+        refreshPackageErrors();
+        refreshSpriteList();
+        selectSource(sd);
         codeWorkspace.loadSpriteCode(sd);
         autoCompile();
     }
 
     private void deleteSprite() {
-        int idx = spriteList.getSelectedIndex();
-        if (idx == -1) return;
-        SpriteData sd = project.sprites.get(idx);
+        SpriteData sd = getSelectedSource();
+        if (sd == null) return;
         if (sd.name.equals("Main")) {
             JOptionPane.showMessageDialog(this, "Cannot delete Main sprite.");
             return;
@@ -319,14 +645,15 @@ public class ScratchEditor extends JFrame {
         int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete sprite '" + sd.name + "'?", "Delete Sprite", JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
 
-        project.sprites.remove(idx);
-        spriteListModel.remove(idx);
-
-        if (project.sprites.size() > 0) {
-            int newIdx = Math.min(idx, project.sprites.size() - 1);
-            spriteList.setSelectedIndex(newIdx);
-            codeWorkspace.loadSpriteCode(project.sprites.get(newIdx));
+        try {
+            File sourceFile = new File(WorkspaceManager.getSrcDir(), sd.getSourcePath().replace('/', File.separatorChar));
+            Files.deleteIfExists(sourceFile.toPath());
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Could not remove the source file: " + ex.getMessage(), "Delete failed", JOptionPane.ERROR_MESSAGE);
+            return;
         }
+        project.sprites.remove(sd);
+        refreshSpriteList();
         autoCompile();
     }
 
@@ -373,12 +700,16 @@ public class ScratchEditor extends JFrame {
         saveItem.addActionListener(e -> saveProject());
         JMenuItem saveAsItem = new JMenuItem("Save Project As...");
         saveAsItem.addActionListener(e -> saveProjectAs());
+        JMenuItem exportJarItem = new JMenuItem("Export Standalone JAR...");
+        exportJarItem.addActionListener(e -> exportJar());
         
         fileMenu.add(newItem);
         fileMenu.addSeparator();
         fileMenu.add(openItem);
         fileMenu.add(saveItem);
         fileMenu.add(saveAsItem);
+        fileMenu.addSeparator();
+        fileMenu.add(exportJarItem);
         
         JMenu runMenu = new JMenu("Run");
         JMenuItem runItem = new JMenuItem("Run Project");
@@ -493,6 +824,26 @@ public class ScratchEditor extends JFrame {
         }
     }
 
+    private void exportJar() {
+        logToConsole("Compiling project before export...");
+        new Thread(() -> {
+            File srcBackup = createSrcBackup();
+            CompilationResult res = runCompile();
+            SwingUtilities.invokeLater(() -> {
+                codeWorkspace.setCompilationErrors(res.errors);
+                if (res.success) {
+                    ProjectRunner.mount(WorkspaceManager.getBinDir());
+                    deleteRecursive(srcBackup);
+                    new JarExporterGUI(this, findMainClass()).setVisible(true);
+                } else {
+                    restoreSrcBackup(srcBackup);
+                    logToConsole("--- Export aborted: build failed ---");
+                    logToConsole(res.output);
+                }
+            });
+        }).start();
+    }
+
     private void runAndRunProject() {
         new Thread(() -> {
             File srcBackup = createSrcBackup();
@@ -502,7 +853,7 @@ public class ScratchEditor extends JFrame {
                 if (res.success) {
                     logToConsole("--- Build Successful ---");
                     ProjectRunner.mount(WorkspaceManager.getBinDir());
-                    ProjectRunner.run(WorkspaceManager.getBinDir(), "Main");
+                    ProjectRunner.run(WorkspaceManager.getBinDir(), findMainPackage(), "Main");
                     deleteRecursive(srcBackup);
                 } else {
                     logToConsole("--- Build Failed ---");
@@ -513,12 +864,31 @@ public class ScratchEditor extends JFrame {
         }).start();
     }
     
+    /** Fully-qualified project entry point used by the runner and exported game. */
+    private String findMainClass() {
+        for (SpriteData sd : project.sprites) if ("Main".equals(sd.name)) return classNameForSourcePath(sd);
+        return "generated.Main";
+    }
+
+    private String findMainPackage() {
+        for (SpriteData sd : project.sprites) if ("Main".equals(sd.name)) return packageForSourcePath(sd.getSourcePath());
+        return "generated";
+    }
+
     private CompilationResult runCompile() {
         codeWorkspace.saveCurrentCode();
         File binDir = WorkspaceManager.getBinDir();
         File srcDir = WorkspaceManager.getSrcDir();
-        File generatedSrcDir = new File(srcDir, "generated");
-        
+        List<String> packageErrors = validateProjectPackages();
+        if (!packageErrors.isEmpty()) {
+            CompilationResult invalid = new CompilationResult();
+            invalid.success = false;
+            StringBuilder message = new StringBuilder("Package declarations and source folders must match:\n");
+            for (String error : packageErrors) message.append(" - ").append(error).append('\n');
+            invalid.output = message.toString();
+            return invalid;
+        }
+
         // 1. Clear ONLY bin
         if (binDir.exists()) {
             File[] files = binDir.listFiles();
@@ -526,34 +896,58 @@ public class ScratchEditor extends JFrame {
         }
         binDir.mkdirs();
 
-        // 2. Targeted cleanup of 'generated' package source (orphaned files)
-        // This removes .java files that are no longer in our project sprite list
-        if (generatedSrcDir.exists()) {
-            File[] files = generatedSrcDir.listFiles((dir, name) -> name.endsWith(".java"));
-            if (files != null) {
-                for (File f : files) {
-                    String className = f.getName().replace(".java", "");
-                    boolean existsInProject = false;
-                    for (SpriteData sd : project.sprites) {
-                        if (sd.name.equals(className)) { existsInProject = true; break; }
-                    }
-                    if (!existsInProject) f.delete();
-                }
-            }
-        } else {
-            generatedSrcDir.mkdirs();
-        }
+        // 2. Remove stale source files from all project package folders while
+        // preserving unrelated files and package trees outside this project.
+        cleanupProjectSources(srcDir);
         
+        // The declared Java package, not a UI category, determines where each source file is built.
         int spriteCount = project.sprites.size();
         String[] sourceCode = new String[spriteCount];
         String[] classNames = new String[spriteCount];
         for (int i = 0; i < spriteCount; i++) {
             SpriteData sprite = project.sprites.get(i);
             sourceCode[i] = sprite.sourceCode;
-            classNames[i] = "generated." + sprite.name;
+            classNames[i] = classNameForSourcePath(sprite);
         }
 
         return CompilerService.compile(sourceCode, classNames, srcDir, binDir);
+    }
+
+    /** Compiler identity follows the source path; normally this equals the declared FQN. */
+    private String classNameForSourcePath(SpriteData sprite) {
+        String path = sprite.getSourcePath().replace('\\', '/');
+        if (path.endsWith(".java")) path = path.substring(0, path.length() - 5);
+        return path.replace('/', '.');
+    }
+
+    /** Remove stale Java files only from package folders owned by this project. */
+    private void cleanupProjectSources(File directory) {
+        File[] children = directory.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child.isDirectory()) {
+                cleanupProjectSources(child);
+                String[] remaining = child.list();
+                if (remaining != null && remaining.length == 0) child.delete();
+            } else if (child.getName().endsWith(".java")) {
+                String relative = WorkspaceManager.getSrcDir().toPath().relativize(child.toPath()).toString().replace('\\', '/');
+                String qualified = typeNameForPath(relative);
+                boolean inProject = false;
+                for (SpriteData sd : project.sprites) {
+                    if (qualified.equals(classNameForSourcePath(sd))) { inProject = true; break; }
+                }
+                if (!inProject && belongsToProjectPackage(child)) child.delete();
+            }
+        }
+    }
+
+    /** Do not clean arbitrary source packages; only remove stale files from packages represented here. */
+    private boolean belongsToProjectPackage(File sourceFile) {
+        String folderPackage = packageForFolder(WorkspaceManager.getSrcDir(), sourceFile.getParentFile());
+        for (SpriteData sprite : project.sprites) {
+            if (folderPackage.equals(packageForSourcePath(sprite.getSourcePath()))) return true;
+        }
+        return false;
     }
 
     private File createSrcBackup() {

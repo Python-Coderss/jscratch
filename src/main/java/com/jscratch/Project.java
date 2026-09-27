@@ -29,7 +29,12 @@ public class Project {
     }
 
     public static class SpriteData {
+        /** Simple Java type name, retained separately so UI labels stay readable. */
         public String name;
+        /** Declared Java package; missing values in older project JSON remain compatible. */
+        public String packageName = "generated";
+        /** Source-tree identity; empty means a project-only type not yet written to disk. */
+        public String sourcePath = "";
         public List<String> costumes = new ArrayList<>();
         public List<String> sounds = new ArrayList<>();
         public String sourceCode = ""; 
@@ -37,6 +42,21 @@ public class Project {
         public SpriteData(String name) {
             this.name = name;
         }
+
+        /** Fully qualified identity used by compiler, runner and package navigator. */
+        public String getQualifiedName() {
+            return packageName == null || packageName.trim().isEmpty()
+                    ? name : packageName.trim() + "." + name;
+        }
+
+        /** Relative source path tracked when discovered or written by the editor. */
+        public String getSourcePath() {
+            if (sourcePath != null && !sourcePath.trim().isEmpty()) return sourcePath.replace('\\', '/');
+            return getQualifiedName().replace('.', '/') + ".java";
+        }
+
+        /** Keep package-tree file labels concise instead of displaying object ids. */
+        @Override public String toString() { return name + ".java"; }
     }
 
     public static class MapMakerData {

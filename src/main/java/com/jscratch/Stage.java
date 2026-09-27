@@ -23,13 +23,41 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.awt.BorderLayout;
 
+/**
+ * Engine hub: owns the sprite draw list, the 60fps render loop, input state,
+ * broadcasts, and stage variables/watchers.
+ *
+ * <p>Call graph / interactions:
+ * <ul>
+ *   <li>Opened by {@link #run(Stage, Runnable)} — called from
+ *       {@code GameBootstrap} (exported jar) or {@code ProjectRunner}
+ *       (in-editor run), which then invokes {@code generated.Main}.</li>
+ *   <li>{@code generated.Scroller2d} reads {@link #getScaleFactor()} every
+ *       update and positions all world/UI sprites from it.</li>
+ *   <li>{@code generated.Sprite1} (player loop) drives the game by calling
+ *       {@code EnemyManager.update}, {@code FloorManager.update},
+ *       {@code MusicDirector.update} and {@code LootDrop.checkAll} once per
+ *       frame, then {@code waitTillNextFrame()} here to pace itself.</li>
+ *   <li>Sprites register via {@link #addSprite(Sprite)}; layer order is
+ *       managed with {@link #goToFront(Sprite)}/{@link #goToBack(Sprite)}.
+ *       These are cheap synchronized memmoves (NOT copy-on-write), but
+ *       callers must still avoid calling them per frame — see Scroller2d.</li>
+ *   <li>Scripts run on daemon threads via {@code ScratchObject.startScript};
+ *       they block on {@link #waitNextFrame()} which the render timer
+ *       releases. Sounds stop on {@code clearSprites/disposeStage}.</li>
+ * </ul>
+ */
 public class Stage extends JPanel implements KeyListener, MouseListener, MouseMotionListener {
     public static Stage instance;
     private JFrame frame;
     private Timer renderTimer;
 
     // Direct translations for Scratch concepts
-    private List<Sprite> sprites = new CopyOnWriteArrayList<>();
+    // NOTE: intentionally NOT CopyOnWriteArrayList. goToFront/goToBack run
+    // per frame; COW copies the whole array on every remove+add (2 allocs
+    // per call, ~250/frame from the minimap + HP bars). A synchronized
+    // ArrayList makes reorder a cheap memmove; paint/click iterate a snapshot.
+    private final List<Sprite> sprites = java.util.Collections.synchronizedList(new ArrayList<>());
     private List<Costume> backdrops = new ArrayList<>();
     private int backdropIndex = 0;
     
@@ -66,6 +94,14 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
         this.addKeyListener(this);
         this.addMouseListener(this);
         this.addMouseMotionListener(this);
+        // Dropped keys wedged movement (e.g. after clicking a toolbar
+        // button): a key released while unfocused never clears, so reset
+        // all input the moment focus leaves the canvas.
+        this.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override public void focusLost(java.awt.event.FocusEvent e) {
+                java.util.Arrays.fill(keysDown, false);
+            }
+        });
         
         renderTimer = new Timer(1000 / 60, e -> {
             update();
@@ -85,6 +121,7 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
     public String getVariableAsString(String name) { return stageObject.getVariableAsString(name); }
     public String answer() { return stageObject.answer(); }
     public void setVariable(String name, Object value) { stageObject.setVariable(name, value); }
+    public void removeVariable(String name) { stageObject.removeVariable(name); }
     public void changeVariableBy(String name, double amount) { stageObject.changeVariableBy(name, amount); }
     public void addToList(String listName, Object item) { stageObject.addToList(listName, item); }
     public String join(Object a, Object b) { return stageObject.join(a, b); }
@@ -143,19 +180,25 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
     
     // --- Setup ---
     public void addSprite(Sprite s) {
-        sprites.add(s);
+        synchronized (sprites) {
+            if (!sprites.contains(s)) sprites.add(s);
+        }
         s.setStage(this);
     }
     
     public void goToFront(Sprite s) {
-        if (sprites.remove(s)) {
-            sprites.add(s);
+        synchronized (sprites) {
+            if (sprites.remove(s)) {
+                sprites.add(s);
+            }
         }
     }
 
     public void goToBack(Sprite s) {
-        if (sprites.remove(s)) {
-            sprites.add(0, s);
+        synchronized (sprites) {
+            if (sprites.remove(s)) {
+                sprites.add(0, s);
+            }
         }
     }
     
@@ -188,23 +231,18 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
             g2d.drawImage(bg, 0, 0, getWidth(), getHeight(), null);
         }
 
-        for (Sprite s : sprites) {
+        List<Sprite> snap;
+        synchronized (sprites) {
+            snap = new ArrayList<>(sprites);
+        }
+        for (Sprite s : snap) {
             if (s.isVisible()) {
                 s.draw(g2d);
             }
         }
-        
-        // Watchers
-        g2d.setColor(new Color(200, 200, 200, 200));
-        int varY = 20;
-        for (java.util.Map.Entry<String, Object> entry : stageObject.variables.entrySet()) {
-            String text = entry.getKey() + ": " + entry.getValue();
-            g2d.fillRoundRect(10, varY - 15, 120, 20, 5, 5);
-            g2d.setColor(Color.BLACK);
-            g2d.drawString(text, 15, varY);
-            g2d.setColor(new Color(200, 200, 200, 200));
-            varY += 25;
-        }
+
+        // No variable watchers here by design: stage/sprite vars are never
+        // rendered on screen.
     }
 
     public void switchBackdropTo(String name) {
@@ -250,7 +288,11 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
         for (java.util.function.BiConsumer<Double, Double> listener : scaleListeners) {
             listener.accept(oldScale, currentScale);
         }
-        for (Sprite s : sprites) {
+        List<Sprite> snap;
+        synchronized (sprites) {
+            snap = new ArrayList<>(sprites);
+        }
+        for (Sprite s : snap) {
             s.handleScaleChange(oldScale, currentScale);
         }
     }
@@ -264,15 +306,25 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
     }
     @Override public void keyReleased(KeyEvent e) { if (e.getKeyCode() < keysDown.length) keysDown[e.getKeyCode()] = false; }
     @Override public void mouseClicked(MouseEvent e) {
-        for (int i = sprites.size() - 1; i >= 0; i--) {
-            Sprite s = sprites.get(i);
+        List<Sprite> snap;
+        synchronized (sprites) {
+            snap = new ArrayList<>(sprites);
+        }
+        for (int i = snap.size() - 1; i >= 0; i--) {
+            Sprite s = snap.get(i);
             if (s.containsPoint(e.getX(), e.getY())) {
                 s.handleMouseClick(e.getX(), e.getY());
                 break;
             }
         }
     }
-    @Override public void mousePressed(MouseEvent e) { mouseDown = true; }
+    @Override public void mousePressed(MouseEvent e) {
+        mouseDown = true;
+        // Clicking the canvas must grab keyboard focus: a JPanel does not
+        // reliably take focus on click, so without this the first click
+        // (e.g. Descend) works but all subsequent keys go nowhere.
+        requestFocusInWindow();
+    }
     @Override public void mouseReleased(MouseEvent e) { mouseDown = false; }
     @Override public void mouseEntered(MouseEvent e) {}
     @Override public void mouseExited(MouseEvent e) {}
@@ -283,7 +335,17 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
         run(new Stage(), setup);
     }
 
+    /**
+     * Opens the stage in a new window, then runs the given setup on the EDT.
+     * The default close operation is DISPOSE_ON_CLOSE (used by the editor and
+     * the in-editor runner); use {@link #run(Stage, Runnable, int)} for other
+     * behaviors such as EXIT_ON_CLOSE for standalone exported games.
+     */
     public static void run(Stage stage, Runnable setup) {
+        run(stage, setup, javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
+    }
+
+    public static void run(Stage stage, Runnable setup, int closeOperation) {
         instance = stage;
         SwingUtilities.invokeLater(() -> {
             JFrame frame = new JFrame("JScratch Stage");
@@ -292,24 +354,37 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
             
             JToolBar toolBar = new JToolBar();
             toolBar.setFloatable(false);
+            // Scale buttons must never park keyboard focus (a focused
+            // button eats Space/Enter and WASD never reaches the canvas).
             
             JButton btn1x = new JButton("480x360");
+            btn1x.setFocusable(false);
             btn1x.addActionListener(e -> stage.setStageScale(1, frame));
             toolBar.add(btn1x);
             
             JButton btn2x = new JButton("960x720");
+            btn2x.setFocusable(false);
             btn2x.addActionListener(e -> stage.setStageScale(2, frame));
             toolBar.add(btn2x);
 
             JButton btn3x = new JButton("1440x1080");
+            btn3x.setFocusable(false);
             btn3x.addActionListener(e -> stage.setStageScale(3, frame));
             toolBar.add(btn3x);
             
             frame.add(toolBar, BorderLayout.NORTH);
             frame.add(stage, BorderLayout.CENTER);
+
+            // Alt-Tab back (or any activation without a canvas click) must
+            // restore keys to the canvas, not to whichever button had focus.
+            frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowActivated(java.awt.event.WindowEvent e) {
+                    stage.requestFocusInWindow();
+                }
+            });
             
             frame.pack();
-            frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            frame.setDefaultCloseOperation(closeOperation);
             frame.setVisible(true);
             stage.requestFocusInWindow();
             setup.run();
@@ -317,9 +392,12 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
     }
 
     public void clearSprites() {
-        sprites.clear();
+        synchronized (sprites) {
+            sprites.clear();
+        }
         broadcastListeners.clear();
         keyListeners.clear();
+        stageObject.stopAllSounds();
         stageObject.activeScripts.clear();
         stageObject.variables.clear();
         stageObject.lists.clear();
@@ -327,6 +405,7 @@ public class Stage extends JPanel implements KeyListener, MouseListener, MouseMo
 
     public void disposeStage() {
         if (renderTimer != null) renderTimer.stop();
+        try { stageObject.stopAllSounds(); } catch (Exception ignored) {}
         if (frame != null) {
             frame.setVisible(false);
             frame.dispose();

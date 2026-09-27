@@ -1,9 +1,13 @@
 package generated;
 
 /**
- * Central configuration for the Minimap system.
- * Change these values to adjust the minimap's appearance and behavior.
- */
+* Central configuration for the Minimap system.
+* Change these values to adjust the minimap's appearance and behavior.
+*
+* <p>Used by: {@code Scroller2d} (tile counts/positions), {@code MinimapTile}
+* and {@code MinimapSprite} (world→minimap math), {@code MinimapWalls}
+* (rect projection). WORLD_TILE_W/H must match the 480x360 map tiles.
+*/
 public class MinimapConfig {
     // Position of the minimap center on the 480x360 stage
     // (Top-right rectangle of a 4x4 grid: X range 120 to 240, Y range 90 to 180)
@@ -19,7 +23,7 @@ public class MinimapConfig {
 
     // How many world tiles to render in each direction around the player
     public static final int RENDER_RADIUS_TILES = 5;
-    
+
     // Total number of tiles in the minimap grid (radius * 2 + 1)
     public static final int GRID_SIZE = (RENDER_RADIUS_TILES * 2) + 1;
     public static final int TOTAL_MINI_TILES = GRID_SIZE * GRID_SIZE;

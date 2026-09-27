@@ -6,6 +6,22 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+/**
+ * Engine base: variables, lists, operators, script threads, and SFX clips.
+ *
+ * <p>Call graph / interactions:
+ * <ul>
+ *   <li>Parent of {@code Sprite} (hence every game sprite) and of the
+ *       anonymous {@code Stage} backing object for globals.</li>
+ *   <li>{@link #startScript(Runnable)} spawns a <b>daemon</b> thread per
+ *       script — used by the player loop, projectile flights, timed VFX,
+ *       and scale listeners. Daemon so closing the window always exits.</li>
+ *   <li>{@link #playSound(String)} spawns a short <b>daemon</b> loader
+ *       thread per SFX hit (long music uses {@code MusicManager} instead).</li>
+ *   <li>Broadcasts delegate to {@code Stage.broadcast}; frame pacing via
+ *       {@code Stage.waitNextFrame}.</li>
+ * </ul>
+ */
 public abstract class ScratchObject {
     protected String name;
     protected Map<String, Object> variables = new ConcurrentHashMap<>();
@@ -31,6 +47,10 @@ public abstract class ScratchObject {
 
     public void setVariable(String name, Object value) {
         variables.put(name, value);
+    }
+
+    public void removeVariable(String name) {
+        variables.remove(name);
     }
     
     public double getVariableAsNumber(String name) {
@@ -118,6 +138,7 @@ public abstract class ScratchObject {
                 activeScripts.remove(Thread.currentThread());
             }
         });
+        t.setDaemon(true);
         activeScripts.add(t);
         t.start();
     }
@@ -150,11 +171,30 @@ public abstract class ScratchObject {
     private List<javax.sound.sampled.Clip> activeClips = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public void playSound(String soundPath) {
-        new Thread(() -> {
+        Thread t = new Thread(() -> {
             try {
+                javax.sound.sampled.AudioInputStream ais = null;
                 java.io.File file = new java.io.File(soundPath);
-                if (!file.exists()) return;
-                javax.sound.sampled.AudioInputStream ais = javax.sound.sampled.AudioSystem.getAudioInputStream(file);
+                if (!file.exists()) {
+                    String projectRoot = System.getProperty("jscratch.project.root");
+                    if (projectRoot != null) {
+                        file = new java.io.File(projectRoot, soundPath);
+                    }
+                }
+                if (file.exists()) {
+                    ais = javax.sound.sampled.AudioSystem.getAudioInputStream(file);
+                } else {
+                    // Fall back to classpath (covers external assets dir mounted
+                    // beside the exported jar by GameBootstrap).
+                    ClassLoader cl = Thread.currentThread().getContextClassLoader();
+                    if (cl == null) cl = getClass().getClassLoader();
+                    java.net.URL url = cl.getResource(soundPath);
+                    if (url == null && soundPath.startsWith("/")) {
+                        url = cl.getResource(soundPath.substring(1));
+                    }
+                    if (url == null) return;
+                    ais = javax.sound.sampled.AudioSystem.getAudioInputStream(url);
+                }
                 javax.sound.sampled.Clip clip = javax.sound.sampled.AudioSystem.getClip();
                 clip.open(ais);
                 
@@ -172,7 +212,9 @@ public abstract class ScratchObject {
                 });
                 clip.start();
             } catch (Exception e) {}
-        }).start();
+        });
+        t.setDaemon(true);
+        t.start();
     }
 
     public void stopAllSounds() {

@@ -14,9 +14,13 @@ public class JarExporterGUI extends JDialog {
     private JTextField targetField;
     private JLabel statusLabel;
     private JButton exportBtn;
+    private final String projectMainClass;
 
-    public JarExporterGUI(Frame parent) {
+    /** Export using the selected project's fully-qualified entry point. */
+    public JarExporterGUI(Frame parent, String projectMainClass) {
         super(parent, "Export Standalone JAR", true);
+        this.projectMainClass = projectMainClass == null || projectMainClass.trim().isEmpty()
+                ? "generated.Main" : projectMainClass.trim();
         setSize(500, 200);
         setLayout(new BorderLayout());
         setLocationRelativeTo(parent);
@@ -75,14 +79,15 @@ public class JarExporterGUI extends JDialog {
                 File engineDir = findEngineClassesDir();
                 
                 if (engineDir == null || !engineDir.exists()) {
-                    throw new Exception("Could not find engine classes directory. Make sure you are running from an IDE (bin or target/classes).");
+                    throw new Exception("Could not find engine classes (running jar or target/classes).");
                 }
 
-                JarExporter.export(target, bin, src, assets, engineDir);
+                JarExporter.export(target, bin, src, assets, engineDir, projectMainClass);
                 
                 SwingUtilities.invokeLater(() -> {
                     statusLabel.setText("Export Successful!");
-                    JOptionPane.showMessageDialog(this, "Project exported successfully to:\n" + target.getAbsolutePath());
+                    JOptionPane.showMessageDialog(this, "Project exported successfully to:\n" + target.getAbsolutePath()
+                            + "\n\nAssets were copied next to the jar:\n" + new File(target.getAbsoluteFile().getParentFile(), "jscratch_ws/assets").getAbsolutePath());
                     dispose();
                 });
             } catch (Exception ex) {
@@ -98,10 +103,13 @@ public class JarExporterGUI extends JDialog {
 
     private File findEngineClassesDir() {
         try {
-            // Get location of the JarExporter class
+            // Get location of the JarExporter class: a classes directory when
+            // running from an IDE, or the editor jar file itself otherwise.
+            // JarExporter reads engine entries straight out of the jar, so the
+            // export always matches the running editor (no stale build tree).
             URL location = JarExporter.class.getProtectionDomain().getCodeSource().getLocation();
             File file = new File(location.toURI());
-            if (file.isDirectory()) {
+            if (file.isDirectory() || (file.isFile() && file.getName().endsWith(".jar"))) {
                 return file;
             }
         } catch (Exception e) {
@@ -116,5 +124,16 @@ public class JarExporterGUI extends JDialog {
         if (bin.exists()) return bin;
         
         return null;
+    }
+    /** Backward-compatible default for standalone use of this dialog. */
+    public JarExporterGUI(Frame parent) {
+        this(parent, "generated.Main");
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            JarExporterGUI gui = new JarExporterGUI(null);
+            gui.setVisible(true);
+        });
     }
 }

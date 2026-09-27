@@ -17,17 +17,38 @@ public void someCode() {
 2. BLOCK HEADER
 ---------------
 Each block MUST start with a header line beginning with '# '.
-Format: # [Name] : [Category] : [Tags]
+Format: # [Name] : [Category] : [Tags] : docs=[Description]
 
 - Name: The display label shown on the block in the UI palette.
-- Category: The tab name where the block will be grouped (e.g., Motion, Looks, Control).
-- Tags (Optional): A comma-separated list of tags that define where this block is allowed to be dropped.
+- Category: The tab name where the block will be grouped (e.g., Motion, Looks, Control, My Blocks).
+- Tags (Optional): A comma-separated list of tags that define where the block is allowed to be dropped.
+- docs (Optional): Help text displayed when hovering over the palette block.
 
-3. CODE BODY
+3. EDITABLE BLOCK INPUTS
+------------------------
+Palette code may use `${param:name:type:default}` to prompt for input values when a user drags a block. `text` values are quoted and escaped, while `number`, `boolean`, and `value` are inserted as Java expressions. `${id}` expands to a unique project block ID and can be used to keep annotation and slot IDs unique.
+
+Method-definition blocks use editable names so calls can match the method declaration. The Method, Method With Parameters, and Static Method blocks belong in a class-body slot (`inClassNotMethod`). Call Method and Call Method With Arguments are command blocks for an instance method (`inInstanceMethod`); Call Static Method is for static-method bodies (`inStaticMethod`). Enter the exact Java method name. Call Method With Arguments accepts a Java expression list, such as `target, amount`.
+
+Example:
+
+```text
+# Method : Structure : inClassNotMethod : docs=Define an instance method.
+public void ${param:methodName:value:myMethod}() {
+    /* slot start [id:"${id}_method_body" tags:"inInstanceMethod"] */
+    /* slot end [id:"${id}_method_body"] */
+}
+###
+# Call Method : My Blocks : inInstanceMethod : docs=Call an instance method.
+${param:methodName:value:myMethod}();
+###
+```
+
+4. CODE BODY
 ------------
 The lines following the header (until the next '###') are the literal Java code that will be inserted into the editor when the block is dropped.
 
-4. SLOT DEFINITIONS (IN-CODE SLOTS)
+5. SLOT DEFINITIONS (IN-CODE SLOTS)
 -----------------------------------
 Slots are designated areas within a block's code (or the base source code) where other blocks can be dropped. They are defined using special Java comments.
 
@@ -41,7 +62,7 @@ Attributes:
 - tags: A comma-separated list of tags. A block can only be dropped here if it shares at least one tag with this list.
 - onlyOne: If "true", the slot will only accept a drop if the area between the comments is currently empty (or just whitespace).
 
-5. HOW SLOTS WORK (EDITOR LOGIC)
+6. HOW SLOTS WORK (EDITOR LOGIC)
 -------------------------------
 When a block is dragged over the editor, the following rules are applied:
 
@@ -54,19 +75,16 @@ D. Formatting:
    - Multiline Slots: If the start and end tags are on different lines, the block must be dropped on an empty line within the slot.
    - Inline Slots: If the tags are on the same line (e.g., for parameters), the block is inserted between them.
 
-6. BLOCK VARIABLES (PHP-LIKE)
-------------------------------
-Blocks can use variables that are replaced with actual values when the block is dropped into the editor.
-
-- ${id}: A unique, incrementing integer ID. Each time a block containing this variable is placed, the ID increases. This is useful for generating unique method names, variable names, or IDs for sprites. The counter is stored globally in the project.
-
 7. BUILT-IN SYSTEM TAGS
 -----------------------
 - anywhere: Allows the block to be dropped anywhere in the editor, bypassing slot checks.
 - allowEmpty: Allows the block to be dropped when the editor is completely empty (no template code).
 
-7. CONVENTIONAL TAGS (USED IN THIS PROJECT)
+8. CONVENTIONAL TAGS (USED IN THIS PROJECT)
 -------------------------------------------
 - inClassNotMethod: For blocks that belong inside a class body (methods, variables).
-- inInstanceMethod: For blocks that belong inside a method body (statements, loops).
+- inInstanceMethod: For blocks that belong inside an instance method body (statements, loops, calls).
+- inStaticMethod: For statements and method calls inside a static method body.
+- inParameterList: For Java parameter-list entries.
 - literal: For slots that expect a single value or parameter.
+- stage: For Main entry-point statements.
