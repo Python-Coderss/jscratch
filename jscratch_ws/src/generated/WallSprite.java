@@ -21,6 +21,8 @@ import java.awt.image.BufferedImage;
 */
 public class WallSprite extends BSprite {
     private static final int TEXEL = 3; // stone texture scale (8px -> 24px cells)
+    private static final Color EDGE_COLOR = new Color(40, 38, 46);
+    private static final Color TOP_COLOR = new Color(140, 136, 150);
     private final int w, h;
     private BufferedImage face;
 
@@ -201,6 +203,12 @@ public class WallSprite extends BSprite {
         int sy = (int) (stage.getHeight() / /* param start [id:"WallSprite_value_89" type:"number"] */2.0/* param end [id:"WallSprite_value_89"] */ - getY());
         /* block end [id:"WallSprite_block_42"] */
 
+        double s = stage.getScaleFactor() * localScale;
+        int dw = Math.max(2, (int) (w * s));
+        int dh = Math.max(2, (int) (h * s));
+        if (sx - dw / 2 > stage.getWidth() || sy - dh / 2 > stage.getHeight()
+                || sx + dw / 2 < 0 || sy + dh / 2 < 0) return;
+
         /* block comment [block:"WallSprite_block_43" text:"Runs the get transform action. Values in this block are editable inputs."] */
         /* block start [id:"WallSprite_block_43" category:"My Blocks" label:"get transform" shape:"command" docs:"Runs the get transform action. Values in this block are editable inputs."] */
         java.awt.geom.AffineTransform old = g.getTransform();
@@ -208,18 +216,6 @@ public class WallSprite extends BSprite {
         /* block comment [block:"WallSprite_block_11" text:"Runs work safely and handles matching errors in a catch branch."] */
         /* block start [id:"WallSprite_block_11" category:"Control" label:"try / catch" shape:"control" docs:"Runs work safely and handles matching errors in a catch branch."] */
         try {
-            /* block comment [block:"WallSprite_block_44" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
-            /* block start [id:"WallSprite_block_44" category:"Variables" label:"set s" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-            double s = stage.getScaleFactor() * localScale;
-            /* block end [id:"WallSprite_block_44"] */
-            /* block comment [block:"WallSprite_block_45" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
-            /* block start [id:"WallSprite_block_45" category:"Variables" label:"set dw" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-            int dw = Math.max(/* param start [id:"WallSprite_value_90" type:"number"] */2/* param end [id:"WallSprite_value_90"] */, (int) (w * s));
-            /* block end [id:"WallSprite_block_45"] */
-            /* block comment [block:"WallSprite_block_46" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
-            /* block start [id:"WallSprite_block_46" category:"Variables" label:"set dh" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-            int dh = Math.max(/* param start [id:"WallSprite_value_91" type:"number"] */2/* param end [id:"WallSprite_value_91"] */, (int) (h * s));
-            /* block end [id:"WallSprite_block_46"] */
             /* block comment [block:"WallSprite_block_12" text:"Checks a Boolean condition and runs the body when it is true."] */
             /* block start [id:"WallSprite_block_12" category:"Control" label:"if then" shape:"control" docs:"Checks a Boolean condition and runs the body when it is true."] */
             if (face != /* param start [id:"WallSprite_value_92" type:"value"] */null/* param end [id:"WallSprite_value_92"] */) {
@@ -231,7 +227,7 @@ public class WallSprite extends BSprite {
             /* block end [id:"WallSprite_block_12"] */
             /* block comment [block:"WallSprite_block_48" text:"Runs the set color action. Values in this block are editable inputs."] */
             /* block start [id:"WallSprite_block_48" category:"Variables" label:"set color" shape:"command" docs:"Runs the set color action. Values in this block are editable inputs."] */
-            g.setColor(new Color(/* param start [id:"WallSprite_value_96" type:"number"] */40/* param end [id:"WallSprite_value_96"] */, /* param start [id:"WallSprite_value_97" type:"number"] */38/* param end [id:"WallSprite_value_97"] */, /* param start [id:"WallSprite_value_98" type:"number"] */46/* param end [id:"WallSprite_value_98"] */));
+            g.setColor(EDGE_COLOR);
             /* block end [id:"WallSprite_block_48"] */
             /* block comment [block:"WallSprite_block_49" text:"Calls the drawRect method using its declared arguments."] */
             /* block start [id:"WallSprite_block_49" category:"My Blocks" label:"call draw rect" shape:"command" docs:"Calls the drawRect method using its declared arguments."] */
@@ -239,7 +235,7 @@ public class WallSprite extends BSprite {
             /* block end [id:"WallSprite_block_49"] */
             /* block comment [block:"WallSprite_block_50" text:"Runs the set color action. Values in this block are editable inputs."] */
             /* block start [id:"WallSprite_block_50" category:"Variables" label:"set color" shape:"command" docs:"Runs the set color action. Values in this block are editable inputs."] */
-            g.setColor(new Color(/* param start [id:"WallSprite_value_101" type:"number"] */140/* param end [id:"WallSprite_value_101"] */, /* param start [id:"WallSprite_value_102" type:"number"] */136/* param end [id:"WallSprite_value_102"] */, /* param start [id:"WallSprite_value_103" type:"number"] */150/* param end [id:"WallSprite_value_103"] */));
+            g.setColor(TOP_COLOR);
             /* block end [id:"WallSprite_block_50"] */
             /* block comment [block:"WallSprite_block_51" text:"Calls the drawLine method using its declared arguments."] */
             /* block start [id:"WallSprite_block_51" category:"My Blocks" label:"call draw line" shape:"command" docs:"Calls the drawLine method using its declared arguments."] */

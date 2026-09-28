@@ -20,6 +20,8 @@ import java.util.List;
 * rects) and the scroller offset for the player anchor. Culled per rect.
 */
 public class MinimapWalls extends Sprite {
+    private static final Color MINI_WALL = new Color(28, 26, 34);
+
     public MinimapWalls() {
         /* block comment [block:"MinimapWalls_block_7" text:"Runs the super action. Values in this block are editable inputs."] */
         /* block start [id:"MinimapWalls_block_7" category:"My Blocks" label:"super" shape:"command" docs:"Runs the super action. Values in this block are editable inputs."] */
@@ -81,7 +83,7 @@ public class MinimapWalls extends Sprite {
         try {
             /* block comment [block:"MinimapWalls_block_18" text:"Runs the set color action. Values in this block are editable inputs."] */
             /* block start [id:"MinimapWalls_block_18" category:"Variables" label:"set color" shape:"command" docs:"Runs the set color action. Values in this block are editable inputs."] */
-            g.setColor(new Color(/* param start [id:"MinimapWalls_value_37" type:"number"] */28/* param end [id:"MinimapWalls_value_37"] */, /* param start [id:"MinimapWalls_value_38" type:"number"] */26/* param end [id:"MinimapWalls_value_38"] */, /* param start [id:"MinimapWalls_value_39" type:"number"] */34/* param end [id:"MinimapWalls_value_39"] */));
+            g.setColor(MINI_WALL);
             /* block end [id:"MinimapWalls_block_18"] */
             /* block comment [block:"MinimapWalls_block_4" text:"Repeats the nested operations for each loop turn."] */
             /* block start [id:"MinimapWalls_block_4" category:"Control" label:"repeat / for" shape:"control" docs:"Repeats the nested operations for each loop turn."] */

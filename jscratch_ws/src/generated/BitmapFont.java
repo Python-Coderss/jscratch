@@ -32,8 +32,27 @@ public final class BitmapFont {
 
     private static final Map<Character, String> PUNCT = new HashMap<Character, String>();
     private static final Map<Character, Glyph> GLYPHS = new HashMap<Character, Glyph>();
-    private static final Map<String, BufferedImage> TINTED = new HashMap<String, BufferedImage>();
-    private static final Map<String, BufferedImage> SCALED = new HashMap<String, BufferedImage>();
+
+    // ASCII fast path: avoids Character boxing on every glyph lookup.
+    private static final Glyph[] ASCII = new Glyph[128];
+    private static int nextGlyphId = 0;
+
+    // Open-addressing long-keyed caches: no string keys, no boxing, no
+    // concatenation on the per-glyph per-frame hot path.
+    private static long[] TINT_KEYS = new long[64];
+    private static BufferedImage[] TINT_VALS = new BufferedImage[64];
+    private static int tintCount = 0;
+    private static long[] SCALE_KEYS = new long[128];
+    private static BufferedImage[] SCALE_VALS = new BufferedImage[128];
+    private static int scaleCount = 0;
+
+    // Memoized widths for repeated strings (identity hits are the common case
+    // for literals; content hits cover strings rebuilt every frame).
+    private static final int WM = 256;
+    private static final String[] WM_KEY = new String[WM];
+    private static final int[] WM_SIZE = new int[WM];
+    private static final boolean[] WM_BOLD = new boolean[WM];
+    private static final int[] WM_VAL = new int[WM];
 
     static {
         /* block comment [block:"BitmapFont_block_47" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
@@ -203,9 +222,20 @@ public final class BitmapFont {
     public static Style style(int size, boolean bold) {
         /* block comment [block:"BitmapFont_block_85" text:"Returns a value or ends the current method."] */
         /* block start [id:"BitmapFont_block_85" category:"Control" label:"return" shape:"command" docs:"Returns a value or ends the current method."] */
-        return new Style(Math.max(/* param start [id:"BitmapFont_value_258" type:"number"] */6/* param end [id:"BitmapFont_value_258"] */, size), bold);
+        int s = Math.max(/* param start [id:"BitmapFont_value_258" type:"number"] */6/* param end [id:"BitmapFont_value_258"] */, size);
+        if (s < 256) {
+            Style st = STYLE_CACHE[bold ? 1 : 0][s];
+            if (st == null) {
+                st = new Style(s, bold);
+                STYLE_CACHE[bold ? 1 : 0][s] = st;
+            }
+            return st;
+        }
+        return new Style(s, bold);
         /* block end [id:"BitmapFont_block_85"] */
     }
+
+    private static final Style[][] STYLE_CACHE = new Style[2][256];
 
     public static int capHeight(Style st) {
         /* block comment [block:"BitmapFont_block_86" text:"Returns a value or ends the current method."] */
@@ -235,6 +265,11 @@ public final class BitmapFont {
         /* block start [id:"BitmapFont_block_91" category:"Variables" label:"set units" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
         double units;
         /* block end [id:"BitmapFont_block_91"] */
+        int id;
+        // memo of the last advanceOf result for this glyph (cap/bold keyed)
+        int advCap = -1;
+        int advBold = -1;
+        int advVal;
     }
 
     private static String fileFor(char c) {
@@ -266,21 +301,23 @@ public final class BitmapFont {
     }
 
     private static Glyph glyph(char c) {
-        /* block comment [block:"BitmapFont_block_96" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        /* block start [id:"BitmapFont_block_96" category:"Variables" label:"set gl" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
+        if (c >= 0 && c < 128) {
+            Glyph g = ASCII[c];
+            if (g != null) return g;
+            g = makeGlyph(c);
+            ASCII[c] = g;
+            return g;
+        }
         Glyph gl = GLYPHS.get(c);
-        /* block end [id:"BitmapFont_block_96"] */
-        /* block comment [block:"BitmapFont_block_97" text:"Evaluates this expression and applies its result."] */
-        /* block start [id:"BitmapFont_block_97" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
-        /* block comment [block:"BitmapFont_block_4" text:"Checks a Boolean condition and runs the body when it is true."] */
-        /* block start [id:"BitmapFont_block_4" category:"Control" label:"if then" shape:"control" docs:"Checks a Boolean condition and runs the body when it is true."] */
-        if (gl != /* param start [id:"BitmapFont_value_269" type:"value"] */null/* param end [id:"BitmapFont_value_269"] */) return gl;
-        /* block end [id:"BitmapFont_block_97"] */
-        /* block end [id:"BitmapFont_block_4"] */
-        /* block comment [block:"BitmapFont_block_98" text:"Evaluates this expression and applies its result."] */
-        /* block start [id:"BitmapFont_block_98" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
-        gl = new Glyph();
-        /* block end [id:"BitmapFont_block_98"] */
+        if (gl != null) return gl;
+        gl = makeGlyph(c);
+        GLYPHS.put(c, gl);
+        return gl;
+    }
+
+    private static Glyph makeGlyph(char c) {
+        Glyph gl = new Glyph();
+        gl.id = nextGlyphId++;
         /* block comment [block:"BitmapFont_block_99" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
         /* block start [id:"BitmapFont_block_99" category:"Variables" label:"set file" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
         String file = fileFor(c);
@@ -387,10 +424,6 @@ public final class BitmapFont {
             /* block end [id:"BitmapFont_block_6"] */
         }
         /* block end [id:"BitmapFont_block_5"] */
-        /* block comment [block:"BitmapFont_block_115" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        /* block start [id:"BitmapFont_block_115" category:"Variables" label:"set put" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        GLYPHS.put(c, gl);
-        /* block end [id:"BitmapFont_block_115"] */
         /* block comment [block:"BitmapFont_block_116" text:"Returns a value or ends the current method."] */
         /* block start [id:"BitmapFont_block_116" category:"Control" label:"return" shape:"command" docs:"Returns a value or ends the current method."] */
         return gl;
@@ -499,26 +532,73 @@ public final class BitmapFont {
         /* block end [id:"BitmapFont_block_130"] */
     }
 
+    private static BufferedImage tintGet(long key) {
+        long k = key + 1;
+        int mask = TINT_KEYS.length - 1;
+        int i = (int) (k ^ (k >>> 32)) & mask;
+        while (TINT_KEYS[i] != 0) {
+            if (TINT_KEYS[i] == k) return TINT_VALS[i];
+            i = (i + 1) & mask;
+        }
+        return null;
+    }
+
+    private static void tintPut(long key, BufferedImage v) {
+        if (tintCount * 4 >= TINT_KEYS.length * 3) {
+            long[] ok = TINT_KEYS;
+            BufferedImage[] ov = TINT_VALS;
+            TINT_KEYS = new long[ok.length * 2];
+            TINT_VALS = new BufferedImage[TINT_KEYS.length];
+            tintCount = 0;
+            for (int i = 0; i < ok.length; i++) if (ok[i] != 0) tintStore(ok[i], ov[i]);
+        }
+        tintStore(key + 1, v);
+    }
+
+    private static void tintStore(long k, BufferedImage v) {
+        int mask = TINT_KEYS.length - 1;
+        int i = (int) (k ^ (k >>> 32)) & mask;
+        while (TINT_KEYS[i] != 0 && TINT_KEYS[i] != k) i = (i + 1) & mask;
+        if (TINT_KEYS[i] == 0) { TINT_KEYS[i] = k; tintCount++; }
+        TINT_VALS[i] = v;
+    }
+
+    private static BufferedImage scaleGet(long key) {
+        long k = key + 1;
+        int mask = SCALE_KEYS.length - 1;
+        int i = (int) (k ^ (k >>> 32)) & mask;
+        while (SCALE_KEYS[i] != 0) {
+            if (SCALE_KEYS[i] == k) return SCALE_VALS[i];
+            i = (i + 1) & mask;
+        }
+        return null;
+    }
+
+    private static void scalePut(long key, BufferedImage v) {
+        if (scaleCount * 4 >= SCALE_KEYS.length * 3) {
+            long[] ok = SCALE_KEYS;
+            BufferedImage[] ov = SCALE_VALS;
+            SCALE_KEYS = new long[ok.length * 2];
+            SCALE_VALS = new BufferedImage[SCALE_KEYS.length];
+            scaleCount = 0;
+            for (int i = 0; i < ok.length; i++) if (ok[i] != 0) scaleStore(ok[i], ov[i]);
+        }
+        scaleStore(key + 1, v);
+    }
+
+    private static void scaleStore(long k, BufferedImage v) {
+        int mask = SCALE_KEYS.length - 1;
+        int i = (int) (k ^ (k >>> 32)) & mask;
+        while (SCALE_KEYS[i] != 0 && SCALE_KEYS[i] != k) i = (i + 1) & mask;
+        if (SCALE_KEYS[i] == 0) { SCALE_KEYS[i] = k; scaleCount++; }
+        SCALE_VALS[i] = v;
+    }
+
     private static BufferedImage tinted(Glyph gl, int rgb) {
-        /* block comment [block:"BitmapFont_block_131" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        /* block start [id:"BitmapFont_block_131" category:"Variables" label:"set key" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        String key = gl.file + /* param start [id:"BitmapFont_value_301" type:"text"] */"#"/* param end [id:"BitmapFont_value_301"] */ + rgb;
-        /* block end [id:"BitmapFont_block_131"] */
-        /* block comment [block:"BitmapFont_block_132" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        /* block start [id:"BitmapFont_block_132" category:"Variables" label:"set t" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        BufferedImage t = TINTED.get(key);
-        /* block end [id:"BitmapFont_block_132"] */
-        /* block comment [block:"BitmapFont_block_133" text:"Evaluates this expression and applies its result."] */
-        /* block start [id:"BitmapFont_block_133" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
-        /* block comment [block:"BitmapFont_block_25" text:"Checks a Boolean condition and runs the body when it is true."] */
-        /* block start [id:"BitmapFont_block_25" category:"Control" label:"if then" shape:"control" docs:"Checks a Boolean condition and runs the body when it is true."] */
-        if (t != /* param start [id:"BitmapFont_value_302" type:"value"] */null/* param end [id:"BitmapFont_value_302"] */) return t;
-        /* block end [id:"BitmapFont_block_133"] */
-        /* block end [id:"BitmapFont_block_25"] */
-        /* block comment [block:"BitmapFont_block_134" text:"Evaluates this expression and applies its result."] */
-        /* block start [id:"BitmapFont_block_134" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
+        long key = ((long) gl.id << 32) | (rgb & 0xFFFFFFFFL);
+        BufferedImage t = tintGet(key);
+        if (t != null) return t;
         t = new BufferedImage(gl.w, gl.h, BufferedImage.TYPE_INT_ARGB);
-        /* block end [id:"BitmapFont_block_134"] */
         /* block comment [block:"BitmapFont_block_135" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
         /* block start [id:"BitmapFont_block_135" category:"Variables" label:"set px" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
         int[] px = gl.img.getRGB(/* param start [id:"BitmapFont_value_303" type:"number"] */0/* param end [id:"BitmapFont_value_303"] */, /* param start [id:"BitmapFont_value_304" type:"number"] */0/* param end [id:"BitmapFont_value_304"] */, gl.w, gl.h, /* param start [id:"BitmapFont_value_305" type:"value"] */null/* param end [id:"BitmapFont_value_305"] */, /* param start [id:"BitmapFont_value_306" type:"number"] */0/* param end [id:"BitmapFont_value_306"] */, gl.w);
@@ -545,7 +625,7 @@ public final class BitmapFont {
         /* block end [id:"BitmapFont_block_138"] */
         /* block comment [block:"BitmapFont_block_139" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
         /* block start [id:"BitmapFont_block_139" category:"Variables" label:"set put" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        TINTED.put(key, t);
+        tintPut(key, t);
         /* block end [id:"BitmapFont_block_139"] */
         /* block comment [block:"BitmapFont_block_140" text:"Returns a value or ends the current method."] */
         /* block start [id:"BitmapFont_block_140" category:"Control" label:"return" shape:"command" docs:"Returns a value or ends the current method."] */
@@ -554,21 +634,10 @@ public final class BitmapFont {
     }
 
     private static BufferedImage scaled(Glyph gl, int rgb, int dw, int dh) {
-        /* block comment [block:"BitmapFont_block_141" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        /* block start [id:"BitmapFont_block_141" category:"Variables" label:"set key" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        String key = gl.file + /* param start [id:"BitmapFont_value_314" type:"text"] */"#"/* param end [id:"BitmapFont_value_314"] */ + rgb + /* param start [id:"BitmapFont_value_315" type:"text"] */"@"/* param end [id:"BitmapFont_value_315"] */ + dw + /* param start [id:"BitmapFont_value_316" type:"text"] */"x"/* param end [id:"BitmapFont_value_316"] */ + dh;
-        /* block end [id:"BitmapFont_block_141"] */
-        /* block comment [block:"BitmapFont_block_142" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        /* block start [id:"BitmapFont_block_142" category:"Variables" label:"set out" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        BufferedImage out = SCALED.get(key);
-        /* block end [id:"BitmapFont_block_142"] */
-        /* block comment [block:"BitmapFont_block_143" text:"Evaluates this expression and applies its result."] */
-        /* block start [id:"BitmapFont_block_143" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
-        /* block comment [block:"BitmapFont_block_28" text:"Checks a Boolean condition and runs the body when it is true."] */
-        /* block start [id:"BitmapFont_block_28" category:"Control" label:"if then" shape:"control" docs:"Checks a Boolean condition and runs the body when it is true."] */
-        if (out != /* param start [id:"BitmapFont_value_317" type:"value"] */null/* param end [id:"BitmapFont_value_317"] */) return out;
-        /* block end [id:"BitmapFont_block_143"] */
-        /* block end [id:"BitmapFont_block_28"] */
+        boolean canCache = dw < 4096 && dh < 4096;
+        long key = canCache ? (((long) gl.id << 48) | ((long) (rgb & 0xFFFFFF) << 24) | ((long) dw << 12) | dh) : 0L;
+        BufferedImage out = canCache ? scaleGet(key) : null;
+        if (out != null) return out;
         /* block comment [block:"BitmapFont_block_144" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
         /* block start [id:"BitmapFont_block_144" category:"Variables" label:"set nativeTint" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
         BufferedImage nativeTint = tinted(gl, rgb);
@@ -612,7 +681,7 @@ public final class BitmapFont {
         /* block end [id:"BitmapFont_block_30"] */
         /* block comment [block:"BitmapFont_block_152" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
         /* block start [id:"BitmapFont_block_152" category:"Variables" label:"set put" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
-        SCALED.put(key, out);
+        if (canCache) scalePut(key, out);
         /* block end [id:"BitmapFont_block_152"] */
         /* block comment [block:"BitmapFont_block_153" text:"Returns a value or ends the current method."] */
         /* block start [id:"BitmapFont_block_153" category:"Control" label:"return" shape:"command" docs:"Returns a value or ends the current method."] */
@@ -720,6 +789,7 @@ public final class BitmapFont {
         if (gl == /* param start [id:"BitmapFont_value_358" type:"value"] */null/* param end [id:"BitmapFont_value_358"] */ || gl.img == /* param start [id:"BitmapFont_value_359" type:"value"] */null/* param end [id:"BitmapFont_value_359"] */) return spaceWidth(cap) + tracking(cap);
         /* block end [id:"BitmapFont_block_167"] */
         /* block end [id:"BitmapFont_block_38"] */
+        if (gl.advCap == cap && gl.advBold == (st.bold ? 1 : 0)) return gl.advVal;
         /* block comment [block:"BitmapFont_block_168" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
         /* block start [id:"BitmapFont_block_168" category:"Variables" label:"set unitScale" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
         double unitScale = cap / CAP_UNITS;
@@ -734,7 +804,11 @@ public final class BitmapFont {
         /* block end [id:"BitmapFont_block_170"] */
         /* block comment [block:"BitmapFont_block_171" text:"Returns a value or ends the current method."] */
         /* block start [id:"BitmapFont_block_171" category:"Control" label:"return" shape:"command" docs:"Returns a value or ends the current method."] */
-        return dw + boldShift(st) + tracking(cap);
+        int adv = dw + boldShift(st) + tracking(cap);
+        gl.advCap = cap;
+        gl.advBold = st.bold ? 1 : 0;
+        gl.advVal = adv;
+        return adv;
         /* block end [id:"BitmapFont_block_171"] */
     }
 
@@ -746,6 +820,9 @@ public final class BitmapFont {
         if (s == /* param start [id:"BitmapFont_value_361" type:"value"] */null/* param end [id:"BitmapFont_value_361"] */ || s.length() == /* param start [id:"BitmapFont_value_362" type:"number"] */0/* param end [id:"BitmapFont_value_362"] */) return /* param start [id:"BitmapFont_value_363" type:"number"] */0/* param end [id:"BitmapFont_value_363"] */;
         /* block end [id:"BitmapFont_block_172"] */
         /* block end [id:"BitmapFont_block_39"] */
+        int wi = (s.hashCode() & 0x7fffffff) & (WM - 1);
+        String wk = WM_KEY[wi];
+        if (wk != null && (wk == s || wk.equals(s)) && WM_SIZE[wi] == st.size && WM_BOLD[wi] == st.bold) return WM_VAL[wi];
         /* block comment [block:"BitmapFont_block_173" text:"Creates or updates a local value. Use it to keep a value for later operations."] */
         /* block start [id:"BitmapFont_block_173" category:"Variables" label:"set total" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
         int total = /* param start [id:"BitmapFont_value_364" type:"number"] */0/* param end [id:"BitmapFont_value_364"] */;
@@ -756,7 +833,12 @@ public final class BitmapFont {
         /* block end [id:"BitmapFont_block_40"] */
         /* block comment [block:"BitmapFont_block_174" text:"Returns a value or ends the current method."] */
         /* block start [id:"BitmapFont_block_174" category:"Control" label:"return" shape:"command" docs:"Returns a value or ends the current method."] */
-        return Math.max(/* param start [id:"BitmapFont_value_366" type:"number"] */0/* param end [id:"BitmapFont_value_366"] */, total - tracking(st.cap));
+        int wres = Math.max(/* param start [id:"BitmapFont_value_366" type:"number"] */0/* param end [id:"BitmapFont_value_366"] */, total - tracking(st.cap));
+        WM_KEY[wi] = s;
+        WM_SIZE[wi] = st.size;
+        WM_BOLD[wi] = st.bold;
+        WM_VAL[wi] = wres;
+        return wres;
         /* block end [id:"BitmapFont_block_174"] */
     }
 

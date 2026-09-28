@@ -35,6 +35,7 @@ public class CharacterCreation extends Sprite {
     private static final int NAME_MAX = 12;
 
     private static final Color GOLD = new Color(226, 200, 120);
+    private static final Color OVERLAY_DIM = new Color(0, 0, 0, 185);
     private static final Color INK = Color.WHITE;
     private static final Color SEL_TEXT = Color.YELLOW;
     private static final Color DIM = new Color(140, 140, 155);
@@ -163,6 +164,9 @@ public class CharacterCreation extends Sprite {
     private volatile List<Btn> buttonsCache;
     private int cacheW = -1, cacheH = -1;
     private volatile boolean dirty = true;
+    private BufferedImage frameCache;
+    private long frameCacheKey;
+    private boolean frameCacheValid;
     private int lastW = -1, lastH = -1;
     private int classPanelX, classPanelY, classPanelW, classPanelH;
     private int pbRowY0, pbRowH;
@@ -1811,6 +1815,7 @@ public class CharacterCreation extends Sprite {
         /* block start [id:"CharacterCreation_block_111" category:"Control" label:"if then" shape:"control" docs:"Checks a Boolean condition and runs the body when it is true."] */
         if (dirty || b == /* param start [id:"CharacterCreation_value_1034" type:"value"] */null/* param end [id:"CharacterCreation_value_1034"] */ || w != cacheW || h != cacheH) { /* block comment [block:"CharacterCreation_block_525" text:"Runs the build buttons action. Values in this block are editable inputs."] */
             /* block start [id:"CharacterCreation_block_525" category:"My Blocks" label:"build buttons" shape:"command" docs:"Runs the build buttons action. Values in this block are editable inputs."] */
+            dirty = false;
             b = buildButtons(w, h);
             /* block end [id:"CharacterCreation_block_525"] */ /* block comment [block:"CharacterCreation_block_526" text:"Evaluates this expression and applies its result."] */
             /* block start [id:"CharacterCreation_block_526" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
@@ -2175,6 +2180,39 @@ public class CharacterCreation extends Sprite {
         /* block end [id:"CharacterCreation_block_608"] */
     }
 
+    private long frameKey(int w, int h, boolean ctrl, boolean death) {
+        long k = 0xcbf29ce484222325L;
+        k = k * 0x100000001b3L + phase;
+        k = k * 0x100000001b3L + w;
+        k = k * 0x100000001b3L + h;
+        k = k * 0x100000001b3L + (ctrl ? 1 : 0);
+        k = k * 0x100000001b3L + (death ? 1 : 0);
+        k = k * 0x100000001b3L + (GameState.isCharacterCreate() ? 1 : 0);
+        k = k * 0x100000001b3L + (GameState.isGameplay() ? 1 : 0);
+        k = k * 0x100000001b3L + classIndex;
+        k = k * 0x100000001b3L + method;
+        k = k * 0x100000001b3L + sel;
+        k = k * 0x100000001b3L + (nameFocused ? 1 : 0);
+        k = k * 0x100000001b3L + classPanelX;
+        k = k * 0x100000001b3L + classPanelY;
+        k = k * 0x100000001b3L + classPanelW;
+        k = k * 0x100000001b3L + classPanelH;
+        k = k * 0x100000001b3L + pbRowY0;
+        k = k * 0x100000001b3L + pbRowH;
+        String hv = hoverId;
+        k = k * 0x100000001b3L + (hv == null ? 0 : hv.hashCode());
+        String hn = heroName;
+        k = k * 0x100000001b3L + (hn == null ? 0 : hn.hashCode());
+        k = k * 0x100000001b3L + (MusicDirector.isMuted() ? 1 : 0);
+        if (nameFocused) k = k * 0x100000001b3L + (System.currentTimeMillis() / 500L);
+        k = k * 0x100000001b3L + System.identityHashCode(buttonsCache);
+        for (int i = 0; i < 6; i++) {
+            k = k * 0x100000001b3L + scores[i];
+            k = k * 0x100000001b3L + pb[i];
+        }
+        return k;
+    }
+
     @Override
     public void draw(Graphics2D g) {
         /* block comment [block:"CharacterCreation_block_609" text:"Runs the if action. Values in this block are editable inputs."] */
@@ -2242,6 +2280,23 @@ public class CharacterCreation extends Sprite {
         if (btns == /* param start [id:"CharacterCreation_value_1191" type:"value"] */null/* param end [id:"CharacterCreation_value_1191"] */) return;
         /* block end [id:"CharacterCreation_block_621"] */
         /* block end [id:"CharacterCreation_block_130"] */
+        long fkey = frameKey(w, h, showControlsOverlay, showDeathOverlay);
+        if (frameCacheValid && fkey == frameCacheKey && frameCache != null) {
+            g.drawImage(frameCache, 0, 0, null);
+            return;
+        }
+        boolean menuMode = !showControlsOverlay && !showDeathOverlay;
+        int wantType = menuMode ? BufferedImage.TYPE_INT_RGB : BufferedImage.TYPE_INT_ARGB;
+        if (frameCache == null || frameCache.getWidth() != w || frameCache.getHeight() != h || frameCache.getType() != wantType) {
+            frameCache = new BufferedImage(w, h, wantType);
+        }
+        Graphics2D live = g;
+        Graphics2D cg = frameCache.createGraphics();
+        cg.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        cg.setComposite(java.awt.AlphaComposite.Clear);
+        cg.fillRect(0, 0, w, h);
+        cg.setComposite(java.awt.AlphaComposite.SrcOver);
+        g = cg;
         /* block comment [block:"CharacterCreation_block_131" text:"Checks a Boolean condition and runs the body when it is true."] */
         /* block start [id:"CharacterCreation_block_131" category:"Control" label:"if then" shape:"control" docs:"Checks a Boolean condition and runs the body when it is true."] */
         if (showControlsOverlay || showDeathOverlay) {
@@ -2249,11 +2304,7 @@ public class CharacterCreation extends Sprite {
             /* block start [id:"CharacterCreation_block_622" category:"My Blocks" label:"call draw modal overlay" shape:"command" docs:"Calls the drawModalOverlay method using its declared arguments."] */
             drawModalOverlay(g, w, h, btns, showDeathOverlay);
             /* block end [id:"CharacterCreation_block_622"] */
-            /* block comment [block:"CharacterCreation_block_623" text:"Returns a value or ends the current method."] */
-            /* block start [id:"CharacterCreation_block_623" category:"Control" label:"return" shape:"command" docs:"Returns a value or ends the current method."] */
-            return;
-            /* block end [id:"CharacterCreation_block_623"] */
-        }
+        } else {
         /* block end [id:"CharacterCreation_block_131"] */
         /* block comment [block:"CharacterCreation_block_624" text:"Runs the get transform action. Values in this block are editable inputs."] */
         /* block start [id:"CharacterCreation_block_624" category:"My Blocks" label:"get transform" shape:"command" docs:"Runs the get transform action. Values in this block are editable inputs."] */
@@ -2731,10 +2782,12 @@ public class CharacterCreation extends Sprite {
             /* block start [id:"CharacterCreation_block_716" category:"Variables" label:"set transform" shape:"command" docs:"Runs the set transform action. Values in this block are editable inputs."] */
             g.setTransform(old);
             /* block end [id:"CharacterCreation_block_716"] */ }
-        /* block comment [block:"CharacterCreation_block_717" text:"Evaluates this expression and applies its result."] */
-        /* block start [id:"CharacterCreation_block_717" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
-        dirty = /* param start [id:"CharacterCreation_value_1471" type:"boolean"] */false/* param end [id:"CharacterCreation_value_1471"] */;
-        /* block end [id:"CharacterCreation_block_717"] */
+        }
+        cg.dispose();
+        g = live;
+        g.drawImage(frameCache, 0, 0, null);
+        frameCacheKey = fkey;
+        frameCacheValid = true;
     }
 
     /** Controls/death modal drawn over the live stage while world updates are paused. */
@@ -2748,7 +2801,7 @@ public class CharacterCreation extends Sprite {
         try {
             /* block comment [block:"CharacterCreation_block_719" text:"Runs the set color action. Values in this block are editable inputs."] */
             /* block start [id:"CharacterCreation_block_719" category:"Variables" label:"set color" shape:"command" docs:"Runs the set color action. Values in this block are editable inputs."] */
-            g.setColor(new Color(/* param start [id:"CharacterCreation_value_1472" type:"number"] */0/* param end [id:"CharacterCreation_value_1472"] */, /* param start [id:"CharacterCreation_value_1473" type:"number"] */0/* param end [id:"CharacterCreation_value_1473"] */, /* param start [id:"CharacterCreation_value_1474" type:"number"] */0/* param end [id:"CharacterCreation_value_1474"] */, /* param start [id:"CharacterCreation_value_1475" type:"number"] */185/* param end [id:"CharacterCreation_value_1475"] */));
+            g.setColor(OVERLAY_DIM);
             /* block end [id:"CharacterCreation_block_719"] */ /* block comment [block:"CharacterCreation_block_720" text:"Calls the fillRect method using its declared arguments."] */
             /* block start [id:"CharacterCreation_block_720" category:"My Blocks" label:"call fill rect" shape:"command" docs:"Calls the fillRect method using its declared arguments."] */
             g.fillRect(/* param start [id:"CharacterCreation_value_1476" type:"number"] */0/* param end [id:"CharacterCreation_value_1476"] */, /* param start [id:"CharacterCreation_value_1477" type:"number"] */0/* param end [id:"CharacterCreation_value_1477"] */, w, h);
@@ -2834,10 +2887,6 @@ public class CharacterCreation extends Sprite {
             /* block start [id:"CharacterCreation_block_735" category:"Variables" label:"set transform" shape:"command" docs:"Runs the set transform action. Values in this block are editable inputs."] */
             g.setTransform(old);
             /* block end [id:"CharacterCreation_block_735"] */ }
-        /* block comment [block:"CharacterCreation_block_736" text:"Evaluates this expression and applies its result."] */
-        /* block start [id:"CharacterCreation_block_736" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
-        dirty = /* param start [id:"CharacterCreation_value_1526" type:"boolean"] */false/* param end [id:"CharacterCreation_value_1526"] */;
-        /* block end [id:"CharacterCreation_block_736"] */
     }
 
     private void drawMute(Graphics2D g, int w, int h) {

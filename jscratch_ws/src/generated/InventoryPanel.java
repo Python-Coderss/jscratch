@@ -6,6 +6,7 @@ import com.jscratch.Stage;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 
 /**
 * Toggleable inventory overlay (I to open/close, Up/Down to select, Enter to equip).
@@ -15,6 +16,29 @@ import java.awt.Graphics2D;
 public class InventoryPanel extends Sprite {
     private boolean open = false;
     private int selected = 0;
+    private BufferedImage panelCache;
+    private long panelCacheKey;
+    private boolean panelCacheValid;
+
+    private long panelKey(int w, int h) {
+        long k = 0xcbf29ce484222325L;
+        k = k * 0x100000001b3L + w;
+        k = k * 0x100000001b3L + h;
+        k = k * 0x100000001b3L + selected;
+        k = k * 0x100000001b3L + Inventory.gold;
+        k = k * 0x100000001b3L + Inventory.bag.size();
+        for (int i = 0; i < Inventory.bag.size(); i++) {
+            Item it = Inventory.bag.get(i);
+            k = k * 0x100000001b3L + (it.name == null ? 0 : it.name.hashCode());
+            k = k * 0x100000001b3L + it.statLine().hashCode();
+        }
+        for (int i = 0; i < SLOTS.length; i++) {
+            Item it = Inventory.equipped.get(SLOTS[i]);
+            k = k * 0x100000001b3L + (it == null || it.name == null ? 0 : it.name.hashCode());
+            k = k * 0x100000001b3L + (it == null ? 0 : it.statLine().hashCode());
+        }
+        return k;
+    }
 
     private static final Color GOLD = new Color(226, 200, 120);
     private static final Color INK = Color.WHITE;
@@ -162,6 +186,22 @@ public class InventoryPanel extends Sprite {
         /* block start [id:"InventoryPanel_block_39" category:"Variables" label:"set tx" shape:"command" docs:"Creates or updates a local value. Use it to keep a value for later operations."] */
         int tx = px + /* param start [id:"InventoryPanel_value_98" type:"number"] */12/* param end [id:"InventoryPanel_value_98"] */;
         /* block end [id:"InventoryPanel_block_39"] */
+        long pkey = panelKey(w, h);
+        if (panelCacheValid && pkey == panelCacheKey && panelCache != null) {
+            g.drawImage(panelCache, px, py, null);
+            return;
+        }
+        if (panelCache == null || panelCache.getWidth() != pw || panelCache.getHeight() != ph) {
+            panelCache = new BufferedImage(pw, ph, BufferedImage.TYPE_INT_ARGB);
+        }
+        Graphics2D live = g;
+        Graphics2D cg = panelCache.createGraphics();
+        cg.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        cg.setComposite(java.awt.AlphaComposite.Clear);
+        cg.fillRect(0, 0, pw, ph);
+        cg.setComposite(java.awt.AlphaComposite.SrcOver);
+        cg.translate(-px, -py);
+        g = cg;
         /* block comment [block:"InventoryPanel_block_40" text:"Runs the get transform action. Values in this block are editable inputs."] */
         /* block start [id:"InventoryPanel_block_40" category:"My Blocks" label:"get transform" shape:"command" docs:"Runs the get transform action. Values in this block are editable inputs."] */
         java.awt.geom.AffineTransform old = g.getTransform();
@@ -323,5 +363,10 @@ public class InventoryPanel extends Sprite {
             /* block start [id:"InventoryPanel_block_77" category:"Variables" label:"set transform" shape:"command" docs:"Runs the set transform action. Values in this block are editable inputs."] */
             g.setTransform(old);
             /* block end [id:"InventoryPanel_block_77"] */ }
+        cg.dispose();
+        g = live;
+        g.drawImage(panelCache, px, py, null);
+        panelCacheKey = pkey;
+        panelCacheValid = true;
     }
 }
