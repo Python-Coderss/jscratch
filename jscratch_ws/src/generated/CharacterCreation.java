@@ -16,9 +16,9 @@ import java.util.List;
 import javax.imageio.ImageIO;
 
 /**
- * Clickable character-creation GUI, rendered on-stage with standard Graphics2D.
- * All text is drawn with the BitmapFont glyph images from jscratch_ws/assets;
- * no D&D engine dependency — uses PlayerStats generic helpers.
+* Clickable character-creation GUI, rendered on-stage with standard Graphics2D.
+* All text is drawn with the BitmapFont glyph images from jscratch_ws/assets;
+* no D&D engine dependency — uses PlayerStats generic helpers.
 *
 * Pages: TITLE -> CLASS (name + 13 clickable class cards) -> STATS
 * (method tabs, reroll, point-buy) -> broadcasts "characterReady".

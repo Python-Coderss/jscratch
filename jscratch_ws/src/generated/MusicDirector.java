@@ -38,11 +38,11 @@ public final class MusicDirector {
     public static void title() {
         /* block comment [block:"MusicDirector_block_10" text:"Evaluates this expression and applies its result."] */
         /* block start [id:"MusicDirector_block_10" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
-        calmPath = MusicManager.EXTRA_TITLE_MEDIEVAL;
+        calmPath = MusicManager.TITLE;
         /* block end [id:"MusicDirector_block_10"] */
         /* block comment [block:"MusicDirector_block_11" text:"Evaluates this expression and applies its result."] */
         /* block start [id:"MusicDirector_block_11" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */
-        combatPath = MusicManager.EXTRA_TITLE_MEDIEVAL;
+        combatPath = MusicManager.TITLE;
         /* block end [id:"MusicDirector_block_11"] */
         /* block comment [block:"MusicDirector_block_12" text:"Evaluates this expression and applies its result."] */
         /* block start [id:"MusicDirector_block_12" category:"Operators" label:"calculate / update value" shape:"command" docs:"Evaluates this expression and applies its result."] */

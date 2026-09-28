@@ -48,6 +48,8 @@ import javax.sound.sampled.SourceDataLine;
 public final class MusicManager {
 
     // ---- Catalog: assets/music_game/ (22050 Hz mono 16-bit WAV) ----
+    // Title theme: converted from assets/music_game/title.mp3.
+    public static final String TITLE               = "jscratch_ws/assets/music_game/title.wav";
     public static final String BOSS_CHANT_TRIBAL   = "jscratch_ws/assets/music_game/boss_chant_tribal.wav";
     public static final String BOSS_DEATH_ODYSSEY  = "jscratch_ws/assets/music_game/boss_death_odyssey.wav";
     public static final String BOSS_FOURTH_CHORUS  = "jscratch_ws/assets/music_game/boss_fourth_chorus.wav";

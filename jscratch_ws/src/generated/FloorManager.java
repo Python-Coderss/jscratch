@@ -1012,8 +1012,15 @@ public class FloorManager {
         }
     }
 
+    /**
+    * Per-floor tile tint switch. Disabled: every level renders its tiles with
+    * the original art, so there is no colour cast on later floors either.
+    */
+    private static final boolean TILE_TINT_ENABLED = false;
+
     /** Re-tints the 9 shared tile costumes in place (world + minimap follow). */
     private void applyTint(float tr, float tg, float tb) {
+        if (!TILE_TINT_ENABLED) return;
         /* block comment [block:"FloorManager_block_52" text:"Repeats the nested operations for each loop turn."] */
         /* block start [id:"FloorManager_block_52" category:"Control" label:"repeat / for" shape:"control" docs:"Repeats the nested operations for each loop turn."] */
         for (int i = /* param start [id:"FloorManager_value_349" type:"number"] */0/* param end [id:"FloorManager_value_349"] */; i < tileIds.size(); i++) {
